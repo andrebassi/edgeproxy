@@ -1,0 +1,14 @@
+# Mock backend for testing
+FROM python:3.12-alpine
+
+WORKDIR /app
+
+COPY tests/mock_backend.py /app/mock_backend.py
+
+ENV BACKEND_PORT=8080
+ENV BACKEND_ID=backend-1
+ENV BACKEND_REGION=sa
+
+EXPOSE 8080
+
+CMD ["sh", "-c", "python3 /app/mock_backend.py $BACKEND_PORT $BACKEND_ID $BACKEND_REGION"]

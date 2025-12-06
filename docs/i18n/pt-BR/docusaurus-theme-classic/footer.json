@@ -1,0 +1,42 @@
+{
+  "link.title.Docs": {
+    "message": "Documentação",
+    "description": "The title of the footer links column with title=Docs in the footer"
+  },
+  "link.title.Deployment": {
+    "message": "Implantação",
+    "description": "The title of the footer links column with title=Deployment in the footer"
+  },
+  "link.title.More": {
+    "message": "Mais",
+    "description": "The title of the footer links column with title=More in the footer"
+  },
+  "link.item.label.Getting Started": {
+    "message": "Primeiros Passos",
+    "description": "The label of footer link with label=Getting Started"
+  },
+  "link.item.label.Architecture": {
+    "message": "Arquitetura",
+    "description": "The label of footer link with label=Architecture"
+  },
+  "link.item.label.Configuration": {
+    "message": "Configuração",
+    "description": "The label of footer link with label=Configuration"
+  },
+  "link.item.label.Docker": {
+    "message": "Docker",
+    "description": "The label of footer link with label=Docker"
+  },
+  "link.item.label.Kubernetes": {
+    "message": "Kubernetes",
+    "description": "The label of footer link with label=Kubernetes"
+  },
+  "link.item.label.GitHub": {
+    "message": "GitHub",
+    "description": "The label of footer link with label=GitHub"
+  },
+  "copyright": {
+    "message": "Copyright © 2025 edge.cloud. Construído com Docusaurus.",
+    "description": "The footer copyright"
+  }
+}

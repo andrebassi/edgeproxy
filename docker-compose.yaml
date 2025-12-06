@@ -1,0 +1,222 @@
+version: '3.8'
+
+# Multi-region edgeProxy simulation with Docker
+# 3 POPs (SA, US, EU) + 9 backends (3 per region)
+
+services:
+  # ============================================
+  # South America Backends
+  # ============================================
+  sa-node-1:
+    build:
+      context: .
+      dockerfile: Dockerfile.backend
+    environment:
+      - BACKEND_PORT=8080
+      - BACKEND_ID=sa-node-1
+      - BACKEND_REGION=sa
+    networks:
+      edgenet:
+        ipv4_address: 10.10.1.1
+
+  sa-node-2:
+    build:
+      context: .
+      dockerfile: Dockerfile.backend
+    environment:
+      - BACKEND_PORT=8080
+      - BACKEND_ID=sa-node-2
+      - BACKEND_REGION=sa
+    networks:
+      edgenet:
+        ipv4_address: 10.10.1.2
+
+  sa-node-3:
+    build:
+      context: .
+      dockerfile: Dockerfile.backend
+    environment:
+      - BACKEND_PORT=8080
+      - BACKEND_ID=sa-node-3
+      - BACKEND_REGION=sa
+    networks:
+      edgenet:
+        ipv4_address: 10.10.1.3
+
+  # ============================================
+  # US Backends
+  # ============================================
+  us-node-1:
+    build:
+      context: .
+      dockerfile: Dockerfile.backend
+    environment:
+      - BACKEND_PORT=8080
+      - BACKEND_ID=us-node-1
+      - BACKEND_REGION=us
+    networks:
+      edgenet:
+        ipv4_address: 10.10.2.1
+
+  us-node-2:
+    build:
+      context: .
+      dockerfile: Dockerfile.backend
+    environment:
+      - BACKEND_PORT=8080
+      - BACKEND_ID=us-node-2
+      - BACKEND_REGION=us
+    networks:
+      edgenet:
+        ipv4_address: 10.10.2.2
+
+  us-node-3:
+    build:
+      context: .
+      dockerfile: Dockerfile.backend
+    environment:
+      - BACKEND_PORT=8080
+      - BACKEND_ID=us-node-3
+      - BACKEND_REGION=us
+    networks:
+      edgenet:
+        ipv4_address: 10.10.2.3
+
+  # ============================================
+  # EU Backends
+  # ============================================
+  eu-node-1:
+    build:
+      context: .
+      dockerfile: Dockerfile.backend
+    environment:
+      - BACKEND_PORT=8080
+      - BACKEND_ID=eu-node-1
+      - BACKEND_REGION=eu
+    networks:
+      edgenet:
+        ipv4_address: 10.10.3.1
+
+  eu-node-2:
+    build:
+      context: .
+      dockerfile: Dockerfile.backend
+    environment:
+      - BACKEND_PORT=8080
+      - BACKEND_ID=eu-node-2
+      - BACKEND_REGION=eu
+    networks:
+      edgenet:
+        ipv4_address: 10.10.3.2
+
+  eu-node-3:
+    build:
+      context: .
+      dockerfile: Dockerfile.backend
+    environment:
+      - BACKEND_PORT=8080
+      - BACKEND_ID=eu-node-3
+      - BACKEND_REGION=eu
+    networks:
+      edgenet:
+        ipv4_address: 10.10.3.3
+
+  # ============================================
+  # edgeProxy POPs
+  # ============================================
+  pop-sa:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    environment:
+      - EDGEPROXY_REGION=sa
+      - EDGEPROXY_LISTEN_ADDR=0.0.0.0:8080
+      - EDGEPROXY_DB_PATH=/app/routing.db
+      - EDGEPROXY_BINDING_TTL_SECS=30
+      - DEBUG=1
+    ports:
+      - "8080:8080"
+    volumes:
+      - ./docker/routing-docker.db:/app/routing.db:ro
+    depends_on:
+      - sa-node-1
+      - sa-node-2
+      - sa-node-3
+      - us-node-1
+      - us-node-2
+      - us-node-3
+      - eu-node-1
+      - eu-node-2
+      - eu-node-3
+    networks:
+      edgenet:
+        ipv4_address: 10.10.0.10
+
+  pop-us:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    environment:
+      - EDGEPROXY_REGION=us
+      - EDGEPROXY_LISTEN_ADDR=0.0.0.0:8080
+      - EDGEPROXY_DB_PATH=/app/routing.db
+      - EDGEPROXY_BINDING_TTL_SECS=30
+      - DEBUG=1
+    ports:
+      - "8081:8080"
+    volumes:
+      - ./docker/routing-docker.db:/app/routing.db:ro
+    depends_on:
+      - sa-node-1
+      - us-node-1
+      - eu-node-1
+    networks:
+      edgenet:
+        ipv4_address: 10.10.0.11
+
+  pop-eu:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    environment:
+      - EDGEPROXY_REGION=eu
+      - EDGEPROXY_LISTEN_ADDR=0.0.0.0:8080
+      - EDGEPROXY_DB_PATH=/app/routing.db
+      - EDGEPROXY_BINDING_TTL_SECS=30
+      - DEBUG=1
+    ports:
+      - "8082:8080"
+    volumes:
+      - ./docker/routing-docker.db:/app/routing.db:ro
+    depends_on:
+      - sa-node-1
+      - us-node-1
+      - eu-node-1
+    networks:
+      edgenet:
+        ipv4_address: 10.10.0.12
+
+  # ============================================
+  # Test Runner
+  # ============================================
+  test-runner:
+    image: alpine:3.19
+    depends_on:
+      - pop-sa
+      - pop-us
+      - pop-eu
+    volumes:
+      - ./tests:/tests:ro
+    networks:
+      edgenet:
+        ipv4_address: 10.10.0.100
+    entrypoint: ["sh", "-c", "apk add --no-cache bash netcat-openbsd sqlite && sleep 5 && /tests/test_docker.sh"]
+    profiles:
+      - test
+
+networks:
+  edgenet:
+    driver: bridge
+    ipam:
+      config:
+        - subnet: 10.10.0.0/16

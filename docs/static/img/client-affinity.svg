@@ -1,0 +1,165 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 900 420">
+  <defs>
+    <linearGradient id="clientGrad1" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" style="stop-color:#8B5CF6;stop-opacity:1" />
+      <stop offset="100%" style="stop-color:#7C3AED;stop-opacity:1" />
+    </linearGradient>
+    <linearGradient id="clientGrad2" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" style="stop-color:#EC4899;stop-opacity:1" />
+      <stop offset="100%" style="stop-color:#DB2777;stop-opacity:1" />
+    </linearGradient>
+    <linearGradient id="clientGrad3" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" style="stop-color:#06B6D4;stop-opacity:1" />
+      <stop offset="100%" style="stop-color:#0891B2;stop-opacity:1" />
+    </linearGradient>
+    <linearGradient id="backendGradA" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" style="stop-color:#10B981;stop-opacity:1" />
+      <stop offset="100%" style="stop-color:#059669;stop-opacity:1" />
+    </linearGradient>
+    <filter id="shadow" x="-20%" y="-20%" width="140%" height="140%">
+      <feDropShadow dx="0" dy="4" stdDeviation="6" flood-opacity="0.15"/>
+    </filter>
+  </defs>
+
+  <!-- Background -->
+  <rect width="900" height="420" fill="#0f172a" rx="12"/>
+
+  <!-- Title -->
+  <text x="450" y="35" text-anchor="middle" fill="white" font-family="system-ui" font-size="20" font-weight="600">Client Affinity (Sticky Sessions)</text>
+
+  <!-- Binding Table -->
+  <g filter="url(#shadow)">
+    <rect x="300" y="60" width="300" height="150" rx="10" fill="#1E293B" stroke="#334155" stroke-width="2"/>
+    <text x="450" y="85" text-anchor="middle" fill="white" font-family="system-ui" font-size="14" font-weight="600">Binding Table (DashMap)</text>
+
+    <!-- Table Header -->
+    <rect x="315" y="95" width="270" height="25" rx="4" fill="#0F172A"/>
+    <text x="365" y="112" text-anchor="middle" fill="#94A3B8" font-family="monospace" font-size="10">Client IP</text>
+    <text x="480" y="112" text-anchor="middle" fill="#94A3B8" font-family="monospace" font-size="10">Backend</text>
+    <text x="555" y="112" text-anchor="middle" fill="#94A3B8" font-family="monospace" font-size="10">TTL</text>
+
+    <!-- Row 1 -->
+    <rect x="315" y="125" width="270" height="22" rx="2" fill="#0F172A" opacity="0.5"/>
+    <text x="365" y="140" text-anchor="middle" fill="#8B5CF6" font-family="monospace" font-size="10">192.168.1.100</text>
+    <text x="480" y="140" text-anchor="middle" fill="#10B981" font-family="monospace" font-size="10">sa-node-1</text>
+    <text x="555" y="140" text-anchor="middle" fill="#94A3B8" font-family="monospace" font-size="10">598s</text>
+
+    <!-- Row 2 -->
+    <rect x="315" y="150" width="270" height="22" rx="2" fill="#0F172A" opacity="0.3"/>
+    <text x="365" y="165" text-anchor="middle" fill="#EC4899" font-family="monospace" font-size="10">10.0.0.50</text>
+    <text x="480" y="165" text-anchor="middle" fill="#10B981" font-family="monospace" font-size="10">us-node-2</text>
+    <text x="555" y="165" text-anchor="middle" fill="#94A3B8" font-family="monospace" font-size="10">432s</text>
+
+    <!-- Row 3 -->
+    <rect x="315" y="175" width="270" height="22" rx="2" fill="#0F172A" opacity="0.5"/>
+    <text x="365" y="190" text-anchor="middle" fill="#06B6D4" font-family="monospace" font-size="10">172.16.0.1</text>
+    <text x="480" y="190" text-anchor="middle" fill="#10B981" font-family="monospace" font-size="10">eu-node-1</text>
+    <text x="555" y="190" text-anchor="middle" fill="#94A3B8" font-family="monospace" font-size="10">289s</text>
+  </g>
+
+  <!-- Clients on the left -->
+  <g filter="url(#shadow)">
+    <rect x="50" y="120" width="110" height="50" rx="8" fill="url(#clientGrad1)"/>
+    <text x="105" y="145" text-anchor="middle" fill="white" font-family="system-ui" font-size="11" font-weight="500">Client A</text>
+    <text x="105" y="160" text-anchor="middle" fill="rgba(255,255,255,0.7)" font-family="monospace" font-size="9">192.168.1.100</text>
+  </g>
+
+  <g filter="url(#shadow)">
+    <rect x="50" y="185" width="110" height="50" rx="8" fill="url(#clientGrad2)"/>
+    <text x="105" y="210" text-anchor="middle" fill="white" font-family="system-ui" font-size="11" font-weight="500">Client B</text>
+    <text x="105" y="225" text-anchor="middle" fill="rgba(255,255,255,0.7)" font-family="monospace" font-size="9">10.0.0.50</text>
+  </g>
+
+  <!-- Arrows from clients to table -->
+  <path d="M 170 145 Q 230 145 290 125" stroke="#8B5CF6" stroke-width="2" fill="none" stroke-dasharray="5,3"/>
+  <path d="M 170 210 Q 230 180 290 155" stroke="#EC4899" stroke-width="2" fill="none" stroke-dasharray="5,3"/>
+
+  <!-- Backends on the right -->
+  <g filter="url(#shadow)">
+    <rect x="680" y="100" width="130" height="55" rx="8" fill="url(#backendGradA)"/>
+    <text x="745" y="125" text-anchor="middle" fill="white" font-family="system-ui" font-size="12" font-weight="600">sa-node-1</text>
+    <text x="745" y="143" text-anchor="middle" fill="rgba(255,255,255,0.7)" font-family="monospace" font-size="9">10.50.1.1:9000</text>
+  </g>
+
+  <g filter="url(#shadow)">
+    <rect x="680" y="165" width="130" height="55" rx="8" fill="url(#backendGradA)"/>
+    <text x="745" y="190" text-anchor="middle" fill="white" font-family="system-ui" font-size="12" font-weight="600">us-node-2</text>
+    <text x="745" y="208" text-anchor="middle" fill="rgba(255,255,255,0.7)" font-family="monospace" font-size="9">10.50.2.2:9000</text>
+  </g>
+
+  <!-- Arrows from table to backends -->
+  <path d="M 610 135 L 670 127" stroke="#10B981" stroke-width="2" fill="none"/>
+  <polygon points="680,125 666,120 668,133" fill="#10B981"/>
+
+  <path d="M 610 160 L 670 185" stroke="#10B981" stroke-width="2" fill="none"/>
+  <polygon points="680,190 666,182 668,195" fill="#10B981"/>
+
+  <!-- Lifecycle Section -->
+  <rect x="50" y="260" width="800" height="145" rx="8" fill="#1E293B" stroke="#334155"/>
+  <text x="70" y="285" fill="white" font-family="system-ui" font-size="14" font-weight="500">Binding Lifecycle</text>
+
+  <!-- New Connection -->
+  <g>
+    <circle cx="130" cy="340" r="30" fill="#3B82F6"/>
+    <text x="130" y="335" text-anchor="middle" fill="white" font-family="system-ui" font-size="16" font-weight="700">1</text>
+    <text x="130" y="352" text-anchor="middle" fill="rgba(255,255,255,0.8)" font-family="system-ui" font-size="8">New</text>
+    <text x="130" y="385" text-anchor="middle" fill="#94A3B8" font-family="system-ui" font-size="10">No binding</text>
+    <text x="130" y="398" text-anchor="middle" fill="#94A3B8" font-family="system-ui" font-size="10">Use LB</text>
+  </g>
+
+  <!-- Arrow -->
+  <path d="M 170 340 L 220 340" stroke="#475569" stroke-width="2" fill="none"/>
+  <polygon points="230,340 218,333 218,347" fill="#475569"/>
+
+  <!-- Create Binding -->
+  <g>
+    <circle cx="280" cy="340" r="30" fill="#10B981"/>
+    <text x="280" y="335" text-anchor="middle" fill="white" font-family="system-ui" font-size="16" font-weight="700">2</text>
+    <text x="280" y="352" text-anchor="middle" fill="rgba(255,255,255,0.8)" font-family="system-ui" font-size="8">Create</text>
+    <text x="280" y="385" text-anchor="middle" fill="#94A3B8" font-family="system-ui" font-size="10">Insert binding</text>
+    <text x="280" y="398" text-anchor="middle" fill="#94A3B8" font-family="system-ui" font-size="10">TTL=600s</text>
+  </g>
+
+  <!-- Arrow -->
+  <path d="M 320 340 L 370 340" stroke="#475569" stroke-width="2" fill="none"/>
+  <polygon points="380,340 368,333 368,347" fill="#475569"/>
+
+  <!-- Reconnect -->
+  <g>
+    <circle cx="430" cy="340" r="30" fill="#8B5CF6"/>
+    <text x="430" y="335" text-anchor="middle" fill="white" font-family="system-ui" font-size="16" font-weight="700">3</text>
+    <text x="430" y="352" text-anchor="middle" fill="rgba(255,255,255,0.8)" font-family="system-ui" font-size="8">Reconnect</text>
+    <text x="430" y="385" text-anchor="middle" fill="#94A3B8" font-family="system-ui" font-size="10">Found binding</text>
+    <text x="430" y="398" text-anchor="middle" fill="#94A3B8" font-family="system-ui" font-size="10">Update last_seen</text>
+  </g>
+
+  <!-- Arrow -->
+  <path d="M 470 340 L 520 340" stroke="#475569" stroke-width="2" fill="none"/>
+  <polygon points="530,340 518,333 518,347" fill="#475569"/>
+
+  <!-- Same Backend -->
+  <g>
+    <circle cx="580" cy="340" r="30" fill="#F97316"/>
+    <text x="580" y="335" text-anchor="middle" fill="white" font-family="system-ui" font-size="16" font-weight="700">4</text>
+    <text x="580" y="352" text-anchor="middle" fill="rgba(255,255,255,0.8)" font-family="system-ui" font-size="8">Route</text>
+    <text x="580" y="385" text-anchor="middle" fill="#94A3B8" font-family="system-ui" font-size="10">Same backend</text>
+    <text x="580" y="398" text-anchor="middle" fill="#94A3B8" font-family="system-ui" font-size="10">Sticky!</text>
+  </g>
+
+  <!-- Arrow -->
+  <path d="M 620 340 L 670 340" stroke="#475569" stroke-width="2" fill="none"/>
+  <polygon points="680,340 668,333 668,347" fill="#475569"/>
+
+  <!-- TTL Expire / Backend Fail -->
+  <g>
+    <circle cx="730" cy="340" r="30" fill="#EF4444"/>
+    <text x="730" y="335" text-anchor="middle" fill="white" font-family="system-ui" font-size="16" font-weight="700">5</text>
+    <text x="730" y="352" text-anchor="middle" fill="rgba(255,255,255,0.8)" font-family="system-ui" font-size="8">Expire</text>
+    <text x="730" y="385" text-anchor="middle" fill="#94A3B8" font-family="system-ui" font-size="10">TTL expired or</text>
+    <text x="730" y="398" text-anchor="middle" fill="#94A3B8" font-family="system-ui" font-size="10">backend failed</text>
+  </g>
+
+  <!-- Loop back arrow -->
+  <path d="M 765 325 Q 800 280 800 340 Q 800 400 400 400 Q 100 400 100 360 Q 100 320 110 320" stroke="#475569" stroke-width="2" fill="none" stroke-dasharray="5,3"/>
+  <polygon points="100,320 108,310 115,325" fill="#475569"/>
+</svg>
