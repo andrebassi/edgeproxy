@@ -1,0 +1,110 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 700 420">
+  <defs>
+    <linearGradient id="barGrad" x1="0%" y1="0%" x2="100%" y2="0%">
+      <stop offset="0%" style="stop-color:#3B82F6;stop-opacity:1" />
+      <stop offset="100%" style="stop-color:#8B5CF6;stop-opacity:1" />
+    </linearGradient>
+    <linearGradient id="barGradRead" x1="0%" y1="0%" x2="100%" y2="0%">
+      <stop offset="0%" style="stop-color:#10B981;stop-opacity:1" />
+      <stop offset="100%" style="stop-color:#34D399;stop-opacity:1" />
+    </linearGradient>
+  </defs>
+
+  <!-- Background -->
+  <rect width="700" height="420" fill="#0F172A"/>
+
+  <!-- Title -->
+  <text x="350" y="30" text-anchor="middle" fill="#F8FAFC" font-family="Arial, sans-serif" font-size="18" font-weight="bold">RDS Benchmark Results</text>
+  <text x="350" y="50" text-anchor="middle" fill="#94A3B8" font-family="Arial, sans-serif" font-size="11">INSERT &amp; SELECT latency from Fly.io regions to AWS RDS Ireland</text>
+
+  <!-- Legend -->
+  <rect x="500" y="65" width="15" height="15" fill="url(#barGrad)"/>
+  <text x="520" y="77" fill="#94A3B8" font-family="Arial, sans-serif" font-size="10">INSERT (ms)</text>
+  <rect x="590" y="65" width="15" height="15" fill="url(#barGradRead)"/>
+  <text x="610" y="77" fill="#94A3B8" font-family="Arial, sans-serif" font-size="10">READ (ms)</text>
+
+  <!-- Y-axis labels -->
+  <text x="85" y="105" text-anchor="end" fill="#94A3B8" font-family="Arial, sans-serif" font-size="11">LHR</text>
+  <text x="85" y="140" text-anchor="end" fill="#94A3B8" font-family="Arial, sans-serif" font-size="11">CDG</text>
+  <text x="85" y="175" text-anchor="end" fill="#94A3B8" font-family="Arial, sans-serif" font-size="11">FRA</text>
+  <text x="85" y="210" text-anchor="end" fill="#94A3B8" font-family="Arial, sans-serif" font-size="11">IAD</text>
+  <text x="85" y="245" text-anchor="end" fill="#94A3B8" font-family="Arial, sans-serif" font-size="11">ORD</text>
+  <text x="85" y="280" text-anchor="end" fill="#94A3B8" font-family="Arial, sans-serif" font-size="11">LAX</text>
+  <text x="85" y="315" text-anchor="end" fill="#94A3B8" font-family="Arial, sans-serif" font-size="11">SIN</text>
+  <text x="85" y="350" text-anchor="end" fill="#94A3B8" font-family="Arial, sans-serif" font-size="11">GRU</text>
+  <text x="85" y="385" text-anchor="end" fill="#94A3B8" font-family="Arial, sans-serif" font-size="11">NRT</text>
+  <text x="85" y="420" text-anchor="end" fill="#94A3B8" font-family="Arial, sans-serif" font-size="11">SYD</text>
+
+  <!-- Flags -->
+  <text x="25" y="105" fill="#F8FAFC" font-family="Arial, sans-serif" font-size="14">🇬🇧</text>
+  <text x="25" y="140" fill="#F8FAFC" font-family="Arial, sans-serif" font-size="14">🇫🇷</text>
+  <text x="25" y="175" fill="#F8FAFC" font-family="Arial, sans-serif" font-size="14">🇩🇪</text>
+  <text x="25" y="210" fill="#F8FAFC" font-family="Arial, sans-serif" font-size="14">🇺🇸</text>
+  <text x="25" y="245" fill="#F8FAFC" font-family="Arial, sans-serif" font-size="14">🇺🇸</text>
+  <text x="25" y="280" fill="#F8FAFC" font-family="Arial, sans-serif" font-size="14">🇺🇸</text>
+  <text x="25" y="315" fill="#F8FAFC" font-family="Arial, sans-serif" font-size="14">🇸🇬</text>
+  <text x="25" y="350" fill="#F8FAFC" font-family="Arial, sans-serif" font-size="14">🇧🇷</text>
+  <text x="25" y="385" fill="#F8FAFC" font-family="Arial, sans-serif" font-size="14">🇯🇵</text>
+  <text x="25" y="420" fill="#F8FAFC" font-family="Arial, sans-serif" font-size="14">🇦🇺</text>
+
+  <!-- Bars - INSERT (scaled: max 538ms = ~500px) -->
+  <!-- LHR: 25.39ms INSERT, 11.89ms READ -->
+  <rect x="95" y="92" width="24" height="12" rx="2" fill="url(#barGrad)"/>
+  <rect x="95" y="106" width="11" height="10" rx="2" fill="url(#barGradRead)"/>
+  <text x="125" y="102" fill="#94A3B8" font-family="Arial, sans-serif" font-size="9">25.4</text>
+  <text x="112" y="114" fill="#94A3B8" font-family="Arial, sans-serif" font-size="8">11.9</text>
+
+  <!-- CDG: 37.61ms INSERT, 18.48ms READ -->
+  <rect x="95" y="127" width="35" height="12" rx="2" fill="url(#barGrad)"/>
+  <rect x="95" y="141" width="17" height="10" rx="2" fill="url(#barGradRead)"/>
+  <text x="136" y="137" fill="#94A3B8" font-family="Arial, sans-serif" font-size="9">37.6</text>
+  <text x="118" y="149" fill="#94A3B8" font-family="Arial, sans-serif" font-size="8">18.5</text>
+
+  <!-- FRA: 54.17ms INSERT, 26.69ms READ -->
+  <rect x="95" y="162" width="50" height="12" rx="2" fill="url(#barGrad)"/>
+  <rect x="95" y="176" width="25" height="10" rx="2" fill="url(#barGradRead)"/>
+  <text x="151" y="172" fill="#94A3B8" font-family="Arial, sans-serif" font-size="9">54.2</text>
+  <text x="126" y="184" fill="#94A3B8" font-family="Arial, sans-serif" font-size="8">26.7</text>
+
+  <!-- IAD: 173.16ms INSERT, 86.10ms READ -->
+  <rect x="95" y="197" width="161" height="12" rx="2" fill="url(#barGrad)"/>
+  <rect x="95" y="211" width="80" height="10" rx="2" fill="url(#barGradRead)"/>
+  <text x="262" y="207" fill="#94A3B8" font-family="Arial, sans-serif" font-size="9">173.2</text>
+  <text x="181" y="219" fill="#94A3B8" font-family="Arial, sans-serif" font-size="8">86.1</text>
+
+  <!-- ORD: 244.20ms INSERT, 121.68ms READ -->
+  <rect x="95" y="232" width="227" height="12" rx="2" fill="url(#barGrad)"/>
+  <rect x="95" y="246" width="113" height="10" rx="2" fill="url(#barGradRead)"/>
+  <text x="328" y="242" fill="#94A3B8" font-family="Arial, sans-serif" font-size="9">244.2</text>
+  <text x="214" y="254" fill="#94A3B8" font-family="Arial, sans-serif" font-size="8">121.7</text>
+
+  <!-- LAX: 285.52ms INSERT, 138.19ms READ -->
+  <rect x="95" y="267" width="266" height="12" rx="2" fill="url(#barGrad)"/>
+  <rect x="95" y="281" width="129" height="10" rx="2" fill="url(#barGradRead)"/>
+  <text x="367" y="277" fill="#94A3B8" font-family="Arial, sans-serif" font-size="9">285.5</text>
+  <text x="230" y="289" fill="#94A3B8" font-family="Arial, sans-serif" font-size="8">138.2</text>
+
+  <!-- SIN: 332.65ms INSERT, 165.96ms READ -->
+  <rect x="95" y="302" width="310" height="12" rx="2" fill="url(#barGrad)"/>
+  <rect x="95" y="316" width="155" height="10" rx="2" fill="url(#barGradRead)"/>
+  <text x="411" y="312" fill="#94A3B8" font-family="Arial, sans-serif" font-size="9">332.7</text>
+  <text x="256" y="324" fill="#94A3B8" font-family="Arial, sans-serif" font-size="8">166.0</text>
+
+  <!-- GRU: 396.09ms INSERT, 197.72ms READ -->
+  <rect x="95" y="337" width="369" height="12" rx="2" fill="url(#barGrad)"/>
+  <rect x="95" y="351" width="184" height="10" rx="2" fill="url(#barGradRead)"/>
+  <text x="470" y="347" fill="#94A3B8" font-family="Arial, sans-serif" font-size="9">396.1</text>
+  <text x="285" y="359" fill="#94A3B8" font-family="Arial, sans-serif" font-size="8">197.7</text>
+
+  <!-- NRT: 523.35ms INSERT, 261.36ms READ -->
+  <rect x="95" y="372" width="487" height="12" rx="2" fill="url(#barGrad)"/>
+  <rect x="95" y="386" width="243" height="10" rx="2" fill="url(#barGradRead)"/>
+  <text x="588" y="382" fill="#94A3B8" font-family="Arial, sans-serif" font-size="9">523.4</text>
+  <text x="344" y="394" fill="#94A3B8" font-family="Arial, sans-serif" font-size="8">261.4</text>
+
+  <!-- SYD: 538.58ms INSERT, 268.85ms READ -->
+  <rect x="95" y="407" width="501" height="12" rx="2" fill="url(#barGrad)"/>
+  <rect x="95" y="421" width="250" height="10" rx="2" fill="url(#barGradRead)"/>
+  <text x="602" y="417" fill="#94A3B8" font-family="Arial, sans-serif" font-size="9">538.6</text>
+  <text x="351" y="429" fill="#94A3B8" font-family="Arial, sans-serif" font-size="8">268.9</text>
+</svg>

@@ -1,0 +1,133 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 900 500">
+  <defs>
+    <linearGradient id="flyGrad" x1="0%" y1="0%" x2="0%" y2="100%">
+      <stop offset="0%" style="stop-color:#8B5CF6;stop-opacity:1" />
+      <stop offset="100%" style="stop-color:#6D28D9;stop-opacity:1" />
+    </linearGradient>
+    <linearGradient id="awsGrad" x1="0%" y1="0%" x2="0%" y2="100%">
+      <stop offset="0%" style="stop-color:#FF9900;stop-opacity:1" />
+      <stop offset="100%" style="stop-color:#E88B00;stop-opacity:1" />
+    </linearGradient>
+    <linearGradient id="wgGrad" x1="0%" y1="0%" x2="100%" y2="0%">
+      <stop offset="0%" style="stop-color:#88171A;stop-opacity:1" />
+      <stop offset="100%" style="stop-color:#B91C1C;stop-opacity:1" />
+    </linearGradient>
+    <filter id="shadow" x="-20%" y="-20%" width="140%" height="140%">
+      <feDropShadow dx="2" dy="2" stdDeviation="3" flood-opacity="0.3"/>
+    </filter>
+  </defs>
+
+  <!-- Background -->
+  <rect width="900" height="500" fill="#0F172A"/>
+
+  <!-- Title -->
+  <text x="450" y="35" text-anchor="middle" fill="#F8FAFC" font-family="Arial, sans-serif" font-size="20" font-weight="bold">RDS Benchmark Architecture</text>
+  <text x="450" y="55" text-anchor="middle" fill="#94A3B8" font-family="Arial, sans-serif" font-size="12">Fly.io → WireGuard → EC2 Hub → AWS RDS</text>
+
+  <!-- Fly.io Regions Box -->
+  <rect x="30" y="80" width="840" height="140" rx="10" fill="#1E293B" stroke="#334155" stroke-width="2" filter="url(#shadow)"/>
+  <text x="450" y="105" text-anchor="middle" fill="#8B5CF6" font-family="Arial, sans-serif" font-size="14" font-weight="bold">Fly.io Global Edge (10 Regions)</text>
+
+  <!-- Region boxes -->
+  <!-- Row 1 -->
+  <rect x="50" y="120" width="70" height="40" rx="5" fill="url(#flyGrad)" filter="url(#shadow)"/>
+  <text x="85" y="137" text-anchor="middle" fill="white" font-family="Arial, sans-serif" font-size="10" font-weight="bold">GRU</text>
+  <text x="85" y="152" text-anchor="middle" fill="#E0E7FF" font-family="Arial, sans-serif" font-size="8">Brazil</text>
+
+  <rect x="130" y="120" width="70" height="40" rx="5" fill="url(#flyGrad)" filter="url(#shadow)"/>
+  <text x="165" y="137" text-anchor="middle" fill="white" font-family="Arial, sans-serif" font-size="10" font-weight="bold">IAD</text>
+  <text x="165" y="152" text-anchor="middle" fill="#E0E7FF" font-family="Arial, sans-serif" font-size="8">Virginia</text>
+
+  <rect x="210" y="120" width="70" height="40" rx="5" fill="url(#flyGrad)" filter="url(#shadow)"/>
+  <text x="245" y="137" text-anchor="middle" fill="white" font-family="Arial, sans-serif" font-size="10" font-weight="bold">ORD</text>
+  <text x="245" y="152" text-anchor="middle" fill="#E0E7FF" font-family="Arial, sans-serif" font-size="8">Chicago</text>
+
+  <rect x="290" y="120" width="70" height="40" rx="5" fill="url(#flyGrad)" filter="url(#shadow)"/>
+  <text x="325" y="137" text-anchor="middle" fill="white" font-family="Arial, sans-serif" font-size="10" font-weight="bold">LAX</text>
+  <text x="325" y="152" text-anchor="middle" fill="#E0E7FF" font-family="Arial, sans-serif" font-size="8">Los Angeles</text>
+
+  <rect x="370" y="120" width="70" height="40" rx="5" fill="url(#flyGrad)" filter="url(#shadow)"/>
+  <text x="405" y="137" text-anchor="middle" fill="white" font-family="Arial, sans-serif" font-size="10" font-weight="bold">LHR</text>
+  <text x="405" y="152" text-anchor="middle" fill="#E0E7FF" font-family="Arial, sans-serif" font-size="8">London</text>
+
+  <!-- Row 2 -->
+  <rect x="450" y="120" width="70" height="40" rx="5" fill="url(#flyGrad)" filter="url(#shadow)"/>
+  <text x="485" y="137" text-anchor="middle" fill="white" font-family="Arial, sans-serif" font-size="10" font-weight="bold">FRA</text>
+  <text x="485" y="152" text-anchor="middle" fill="#E0E7FF" font-family="Arial, sans-serif" font-size="8">Frankfurt</text>
+
+  <rect x="530" y="120" width="70" height="40" rx="5" fill="url(#flyGrad)" filter="url(#shadow)"/>
+  <text x="565" y="137" text-anchor="middle" fill="white" font-family="Arial, sans-serif" font-size="10" font-weight="bold">CDG</text>
+  <text x="565" y="152" text-anchor="middle" fill="#E0E7FF" font-family="Arial, sans-serif" font-size="8">Paris</text>
+
+  <rect x="610" y="120" width="70" height="40" rx="5" fill="url(#flyGrad)" filter="url(#shadow)"/>
+  <text x="645" y="137" text-anchor="middle" fill="white" font-family="Arial, sans-serif" font-size="10" font-weight="bold">NRT</text>
+  <text x="645" y="152" text-anchor="middle" fill="#E0E7FF" font-family="Arial, sans-serif" font-size="8">Tokyo</text>
+
+  <rect x="690" y="120" width="70" height="40" rx="5" fill="url(#flyGrad)" filter="url(#shadow)"/>
+  <text x="725" y="137" text-anchor="middle" fill="white" font-family="Arial, sans-serif" font-size="10" font-weight="bold">SIN</text>
+  <text x="725" y="152" text-anchor="middle" fill="#E0E7FF" font-family="Arial, sans-serif" font-size="8">Singapore</text>
+
+  <rect x="770" y="120" width="70" height="40" rx="5" fill="url(#flyGrad)" filter="url(#shadow)"/>
+  <text x="805" y="137" text-anchor="middle" fill="white" font-family="Arial, sans-serif" font-size="10" font-weight="bold">SYD</text>
+  <text x="805" y="152" text-anchor="middle" fill="#E0E7FF" font-family="Arial, sans-serif" font-size="8">Sydney</text>
+
+  <!-- WireGuard IPs -->
+  <text x="85" y="175" text-anchor="middle" fill="#94A3B8" font-family="monospace" font-size="8">10.50.1.1</text>
+  <text x="165" y="175" text-anchor="middle" fill="#94A3B8" font-family="monospace" font-size="8">10.50.2.1</text>
+  <text x="245" y="175" text-anchor="middle" fill="#94A3B8" font-family="monospace" font-size="8">10.50.2.2</text>
+  <text x="325" y="175" text-anchor="middle" fill="#94A3B8" font-family="monospace" font-size="8">10.50.2.3</text>
+  <text x="405" y="175" text-anchor="middle" fill="#94A3B8" font-family="monospace" font-size="8">10.50.3.1</text>
+  <text x="485" y="175" text-anchor="middle" fill="#94A3B8" font-family="monospace" font-size="8">10.50.3.2</text>
+  <text x="565" y="175" text-anchor="middle" fill="#94A3B8" font-family="monospace" font-size="8">10.50.3.3</text>
+  <text x="645" y="175" text-anchor="middle" fill="#94A3B8" font-family="monospace" font-size="8">10.50.4.1</text>
+  <text x="725" y="175" text-anchor="middle" fill="#94A3B8" font-family="monospace" font-size="8">10.50.4.2</text>
+  <text x="805" y="175" text-anchor="middle" fill="#94A3B8" font-family="monospace" font-size="8">10.50.4.3</text>
+
+  <!-- WireGuard Mesh -->
+  <rect x="150" y="240" width="600" height="50" rx="8" fill="url(#wgGrad)" filter="url(#shadow)"/>
+  <text x="450" y="262" text-anchor="middle" fill="white" font-family="Arial, sans-serif" font-size="12" font-weight="bold">WireGuard Mesh Network</text>
+  <text x="450" y="278" text-anchor="middle" fill="#FECACA" font-family="monospace" font-size="10">10.50.0.0/16 • UDP 51820</text>
+
+  <!-- Connection lines from regions to mesh -->
+  <line x1="85" y1="185" x2="200" y2="240" stroke="#B91C1C" stroke-width="1" stroke-dasharray="4,2"/>
+  <line x1="165" y1="185" x2="250" y2="240" stroke="#B91C1C" stroke-width="1" stroke-dasharray="4,2"/>
+  <line x1="245" y1="185" x2="320" y2="240" stroke="#B91C1C" stroke-width="1" stroke-dasharray="4,2"/>
+  <line x1="325" y1="185" x2="380" y2="240" stroke="#B91C1C" stroke-width="1" stroke-dasharray="4,2"/>
+  <line x1="405" y1="185" x2="430" y2="240" stroke="#B91C1C" stroke-width="1" stroke-dasharray="4,2"/>
+  <line x1="485" y1="185" x2="470" y2="240" stroke="#B91C1C" stroke-width="1" stroke-dasharray="4,2"/>
+  <line x1="565" y1="185" x2="520" y2="240" stroke="#B91C1C" stroke-width="1" stroke-dasharray="4,2"/>
+  <line x1="645" y1="185" x2="580" y2="240" stroke="#B91C1C" stroke-width="1" stroke-dasharray="4,2"/>
+  <line x1="725" y1="185" x2="650" y2="240" stroke="#B91C1C" stroke-width="1" stroke-dasharray="4,2"/>
+  <line x1="805" y1="185" x2="700" y2="240" stroke="#B91C1C" stroke-width="1" stroke-dasharray="4,2"/>
+
+  <!-- EC2 Hub -->
+  <rect x="350" y="320" width="200" height="70" rx="10" fill="url(#awsGrad)" filter="url(#shadow)"/>
+  <text x="450" y="345" text-anchor="middle" fill="white" font-family="Arial, sans-serif" font-size="12" font-weight="bold">EC2 WireGuard Hub</text>
+  <text x="450" y="362" text-anchor="middle" fill="#FEF3C7" font-family="Arial, sans-serif" font-size="10">Ireland (eu-west-1)</text>
+  <text x="450" y="378" text-anchor="middle" fill="#FEF3C7" font-family="monospace" font-size="9">10.50.0.1 • 54.171.48.207</text>
+
+  <!-- Connection from mesh to EC2 -->
+  <line x1="450" y1="290" x2="450" y2="320" stroke="#B91C1C" stroke-width="3"/>
+  <polygon points="450,315 445,305 455,305" fill="#B91C1C"/>
+
+  <!-- NAT/DNAT label -->
+  <rect x="480" y="395" width="80" height="25" rx="4" fill="#1E293B" stroke="#FF9900" stroke-width="1"/>
+  <text x="520" y="412" text-anchor="middle" fill="#FF9900" font-family="Arial, sans-serif" font-size="10" font-weight="bold">NAT/DNAT</text>
+
+  <!-- RDS -->
+  <rect x="350" y="430" width="200" height="55" rx="10" fill="#1E40AF" filter="url(#shadow)"/>
+  <text x="450" y="455" text-anchor="middle" fill="white" font-family="Arial, sans-serif" font-size="12" font-weight="bold">AWS RDS PostgreSQL</text>
+  <text x="450" y="472" text-anchor="middle" fill="#BFDBFE" font-family="monospace" font-size="9">eu-west-1 • Port 5432</text>
+
+  <!-- Connection from EC2 to RDS -->
+  <line x1="450" y1="390" x2="450" y2="430" stroke="#3B82F6" stroke-width="2"/>
+  <polygon points="450,425 445,415 455,415" fill="#3B82F6"/>
+
+  <!-- Legend -->
+  <rect x="30" y="440" width="150" height="45" rx="5" fill="#1E293B" stroke="#334155" stroke-width="1"/>
+  <text x="105" y="455" text-anchor="middle" fill="#94A3B8" font-family="Arial, sans-serif" font-size="9" font-weight="bold">Legend</text>
+  <line x1="40" y1="465" x2="60" y2="465" stroke="#B91C1C" stroke-width="2" stroke-dasharray="4,2"/>
+  <text x="65" y="468" fill="#94A3B8" font-family="Arial, sans-serif" font-size="8">WireGuard Tunnel</text>
+  <line x1="40" y1="478" x2="60" y2="478" stroke="#3B82F6" stroke-width="2"/>
+  <text x="65" y="481" fill="#94A3B8" font-family="Arial, sans-serif" font-size="8">Database Connection</text>
+</svg>
