@@ -1,4 +1,4 @@
-module fly-backend
+module contacts-api
 
 go 1.21
 
