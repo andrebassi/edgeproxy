@@ -4,7 +4,7 @@
 
 [![Website](https://img.shields.io/badge/website-edgeproxy.io-orange)](https://edgeproxy.io)
 [![Documentation](https://img.shields.io/badge/docs-docs.edgeproxy.io-blue)](https://docs.edgeproxy.io)
-[![Release](https://img.shields.io/github/v/release/edge-cloud/edgeproxy)](https://github.com/edge-cloud/edgeproxy/releases)
+[![Release](https://img.shields.io/github/v/release/andrebassi/edgeproxy)](https://github.com/andrebassi/edgeproxy/releases)
 [![License](https://img.shields.io/badge/license-MIT-blue)](LICENSE)
 
 **Website:** https://edgeproxy.io | **Documentation:** https://docs.edgeproxy.io
@@ -43,7 +43,7 @@ Built with the same patterns used by production edge platforms like Fly.io:
 
 ```bash
 # Clone the repository
-git clone https://github.com/edge-cloud/edgeproxy.git
+git clone https://github.com/andrebassi/edgeproxy.git
 cd edgeproxy
 
 # Build
