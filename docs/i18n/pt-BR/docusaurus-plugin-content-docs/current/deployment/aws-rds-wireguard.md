@@ -2,7 +2,7 @@
 sidebar_position: 2
 ---
 
-# RDS via WireGuard
+# Via WireGuard
 
 Este guia cobre a implantação de um banco de dados PostgreSQL no AWS RDS e o acesso seguro através de uma rede overlay WireGuard a partir de aplicações edge no Fly.io.
 
@@ -20,9 +20,24 @@ Esta arquitetura permite que aplicações edge no Fly.io acessem de forma segura
 
 | Componente | Tipo | IP WireGuard | IP Público/Privado | Função |
 |------------|------|--------------|-------------------|--------|
-| **Fly.io App** | Container | 10.50.3.10/32 | dinâmico | Aplicação Go (contacts-api) |
-| **EC2 Hub** | t3.micro | 10.50.0.1/24 | 34.240.78.199 | Gateway WireGuard + NAT |
+| **Fly.io Backend** | Container | 10.50.x.x/32 | dinâmico | Backend Go (multi-região) |
+| **EC2 Hub** | t3.micro | 10.50.0.1/24 | 54.171.48.207 | Gateway WireGuard + NAT |
 | **RDS PostgreSQL** | db.t3.micro | - | 172.31.3.134 | Banco de dados |
+
+### IPs WireGuard Multi-Região
+
+| Região | Código | Localização | IP WireGuard |
+|--------|--------|-------------|--------------|
+| América do Sul | gru | São Paulo | 10.50.1.1/32 |
+| América do Norte | iad | Virginia | 10.50.2.1/32 |
+| América do Norte | ord | Chicago | 10.50.2.2/32 |
+| América do Norte | lax | Los Angeles | 10.50.2.3/32 |
+| Europa | lhr | Londres | 10.50.3.1/32 |
+| Europa | fra | Frankfurt | 10.50.3.2/32 |
+| Europa | cdg | Paris | 10.50.3.3/32 |
+| Ásia Pacífico | nrt | Tokyo | 10.50.4.1/32 |
+| Ásia Pacífico | sin | Singapura | 10.50.4.2/32 |
+| Ásia Pacífico | syd | Sydney | 10.50.4.3/32 |
 
 ### Portas
 
@@ -228,12 +243,13 @@ chmod 400 edgeproxy-hub.pem
 
 ### Passo 8: Script User Data (Cloud-Init)
 
-Este script executa automaticamente quando o EC2 inicia, configurando WireGuard e NAT:
+Este script executa automaticamente quando o EC2 inicia, configurando WireGuard com peers multi-região e NAT:
 
 ```bash
 #!/bin/bash
 # =============================================================================
 # edgeProxy Hub - EC2 Ireland - WireGuard + NAT to RDS
+# Configuração Multi-Região para fly-backend (10 regiões)
 # Executado via cloud-init (User Data) - 100% não-interativo
 # =============================================================================
 set -e
@@ -251,9 +267,9 @@ apt-get update -qq
 apt-get install -y -qq wireguard dnsutils net-tools
 
 # ============================================================================
-# CONFIGURAÇÃO WIREGUARD
+# CONFIGURAÇÃO WIREGUARD - MULTI-REGIÃO
 # ============================================================================
-echo "=== Criando configuração WireGuard ==="
+echo "=== Criando configuração WireGuard (10 regiões) ==="
 mkdir -p /etc/wireguard
 
 cat > /etc/wireguard/wg0.conf << 'WGEOF'
@@ -262,17 +278,70 @@ PrivateKey = EHToyBXWXGOdh8dSngJnE9h6TGZ+VU6FLJDLnwq8Q2g=
 Address = 10.50.0.1/24
 ListenPort = 51820
 
-# Habilitar IP forwarding e regras FORWARD
 PostUp = sysctl -w net.ipv4.ip_forward=1
 PostUp = iptables -A FORWARD -i wg0 -j ACCEPT
 PostUp = iptables -A FORWARD -o wg0 -j ACCEPT
 PostDown = iptables -D FORWARD -i wg0 -j ACCEPT
 PostDown = iptables -D FORWARD -o wg0 -j ACCEPT
 
-# Peer: Fly.io contacts-api (região LHR)
+# Fly.io fly-backend - GRU (São Paulo)
 [Peer]
-PublicKey = 92tt1di3bnUt9C5JGTW6CifmkebGmzAx5A4Rv+pXaCg=
-AllowedIPs = 10.50.3.10/32
+PublicKey = He2jX3+iEl7hUaaJG/i3YcSnStEFAcW/rs/lP0Pw+nc=
+AllowedIPs = 10.50.1.1/32
+PersistentKeepalive = 25
+
+# Fly.io fly-backend - IAD (Virginia)
+[Peer]
+PublicKey = rImgzxPu9MuhqLpcvXQ9xckSSA+AGbDOpBGvTUOwaHQ=
+AllowedIPs = 10.50.2.1/32
+PersistentKeepalive = 25
+
+# Fly.io fly-backend - ORD (Chicago)
+[Peer]
+PublicKey = SIh+oa2J6k4rYA+N1SzskwztVVR/1Hx3ef/yLyyh+VU=
+AllowedIPs = 10.50.2.2/32
+PersistentKeepalive = 25
+
+# Fly.io fly-backend - LAX (Los Angeles)
+[Peer]
+PublicKey = z7JmcJguquFBQiphSSmYBsttr6BoRs8MkCev9o5JkAU=
+AllowedIPs = 10.50.2.3/32
+PersistentKeepalive = 25
+
+# Fly.io fly-backend - LHR (Londres)
+[Peer]
+PublicKey = w+XApd9CmhlyweQr8Fp7YPMbjd6RAk/cmXA6OET9/H0=
+AllowedIPs = 10.50.3.1/32
+PersistentKeepalive = 25
+
+# Fly.io fly-backend - FRA (Frankfurt)
+[Peer]
+PublicKey = g5IzaRpt1hkvFhGTfy5LC0HLwPxVTC5dQb3if5sds24=
+AllowedIPs = 10.50.3.2/32
+PersistentKeepalive = 25
+
+# Fly.io fly-backend - CDG (Paris)
+[Peer]
+PublicKey = C1My7suqoLuYchPIaVLbsB5A/dX21h7wICqa7yL2oX4=
+AllowedIPs = 10.50.3.3/32
+PersistentKeepalive = 25
+
+# Fly.io fly-backend - NRT (Tokyo)
+[Peer]
+PublicKey = 9ZK9FzSzihxrRX9gktc99Oj0WFSJMa0mf33pP2LJ/lU=
+AllowedIPs = 10.50.4.1/32
+PersistentKeepalive = 25
+
+# Fly.io fly-backend - SIN (Singapura)
+[Peer]
+PublicKey = gcwoqaT950PGW1ZaUEV75VEV7HOdyYT5rwdYOUBQzR0=
+AllowedIPs = 10.50.4.2/32
+PersistentKeepalive = 25
+
+# Fly.io fly-backend - SYD (Sydney)
+[Peer]
+PublicKey = 9yHQmzbLKEyM+F1x7obbX0WNaR25XhAcUOdU9SLBeEo=
+AllowedIPs = 10.50.4.3/32
 PersistentKeepalive = 25
 WGEOF
 
@@ -291,8 +360,7 @@ wg show
 echo "=== Configurando NAT para RDS ==="
 
 # Resolver IP do RDS (seguir CNAME e obter registro A)
-RDS_IP=$(host edgeproxy-contacts-db.cfy2y00ia7ys.eu-west-1.rds.amazonaws.com \
-  | grep "has address" | awk '{print $4}' | head -1)
+RDS_IP=$(dig +short A contacts-db.cfoig4acqca3.eu-west-1.rds.amazonaws.com | tail -1)
 echo "IP do RDS resolvido: $RDS_IP"
 echo "$RDS_IP" > /tmp/rds_ip.txt
 
@@ -353,6 +421,28 @@ echo ""
 wg show
 echo "=== Setup Completo: $(date) ==="
 ```
+
+### Referência de Chaves WireGuard
+
+A tabela a seguir mostra todas as chaves WireGuard para a configuração multi-região:
+
+| Região | Chave Privada | Chave Pública |
+|--------|---------------|---------------|
+| **EC2 Hub** | `EHToyBXWXGOdh8dSngJnE9h6TGZ+VU6FLJDLnwq8Q2g=` | `Q9T4p88puHFgI8P8vLGjECvoXr85o5uncZQ2G35vE14=` |
+| gru | `MENNp+hWPGoRMVhbObpNLJYpgAExjbwOSajiTchwsno=` | `He2jX3+iEl7hUaaJG/i3YcSnStEFAcW/rs/lP0Pw+nc=` |
+| iad | `UHKsvajWt38Oe1D/vLrj0k7FQD7d9Tn0qtAxc+/e538=` | `rImgzxPu9MuhqLpcvXQ9xckSSA+AGbDOpBGvTUOwaHQ=` |
+| ord | `kEeHNS0OGP4Ubl78PoGw/cj7DNKJrxD4nMAm0A6bq0s=` | `SIh+oa2J6k4rYA+N1SzskwztVVR/1Hx3ef/yLyyh+VU=` |
+| lax | `kIk+cVQ1rbh/YnWUikDikNRvF1pfZ5wp4L86EZmKd3I=` | `z7JmcJguquFBQiphSSmYBsttr6BoRs8MkCev9o5JkAU=` |
+| lhr | `OIyE5jJJw+HR1K6InBSZOAsF4JwK4W32oNQZf0Y2UH8=` | `w+XApd9CmhlyweQr8Fp7YPMbjd6RAk/cmXA6OET9/H0=` |
+| fra | `iDlDxTX5YgnWdowm8o1UDNBwrLqBHZMDgPlgvbpVBnQ=` | `g5IzaRpt1hkvFhGTfy5LC0HLwPxVTC5dQb3if5sds24=` |
+| cdg | `qJOjGFQOvLYQ3PIQLGmiaPxj1cVN0XXJpwqUdpInCls=` | `C1My7suqoLuYchPIaVLbsB5A/dX21h7wICqa7yL2oX4=` |
+| nrt | `cEs2BDD01y8cvPygwcs7bW3sP2Bw5ZNxJHLvnT8/KGA=` | `9ZK9FzSzihxrRX9gktc99Oj0WFSJMa0mf33pP2LJ/lU=` |
+| sin | `SCMcReLQo154dBpnSBvNTZ/vH/nwcWad7fE5NaPz+lo=` | `gcwoqaT950PGW1ZaUEV75VEV7HOdyYT5rwdYOUBQzR0=` |
+| syd | `eI9nV+ZMP3ZvUX3EYsCpXQBueDd8apcdDRwUhpGtRWY=` | `9yHQmzbLKEyM+F1x7obbX0WNaR25XhAcUOdU9SLBeEo=` |
+
+:::warning Segurança
+Em produção, armazene as chaves privadas no AWS Secrets Manager ou similar. Nunca commit chaves privadas no controle de versão.
+:::
 
 ### Passo 9: Criar EC2
 
@@ -865,13 +955,92 @@ sudo wg show
 ### Conexão com Banco Falha
 
 ```bash
-# No EC2 Hub
+# No EC2 Hub - Testar conectividade com RDS
 nc -zv 172.31.3.134 5432
 
 # Verificar regras NAT
-sudo iptables -t nat -L -n
+sudo iptables -t nat -L -n -v
 
 # Verificar security group do RDS permite EC2
+```
+
+### Reconfigurar Regras NAT (se perdidas após reboot)
+
+Se as regras iptables não foram persistidas, reconfigure manualmente:
+
+```bash
+# SSH para o EC2 Hub
+ssh -i edgeproxy-hub.pem ubuntu@54.171.48.207
+
+# Obter IP do RDS (seguir CNAME para registro A)
+RDS_IP=$(dig +short A contacts-db.cfoig4acqca3.eu-west-1.rds.amazonaws.com | tail -1)
+echo "RDS IP: $RDS_IP"
+
+# Habilitar IP forwarding
+sudo sysctl -w net.ipv4.ip_forward=1
+
+# Adicionar regras FORWARD
+sudo iptables -C FORWARD -d $RDS_IP -p tcp --dport 5432 -j ACCEPT 2>/dev/null || \
+  sudo iptables -A FORWARD -d $RDS_IP -p tcp --dport 5432 -j ACCEPT
+sudo iptables -C FORWARD -s $RDS_IP -p tcp --sport 5432 -j ACCEPT 2>/dev/null || \
+  sudo iptables -A FORWARD -s $RDS_IP -p tcp --sport 5432 -j ACCEPT
+
+# DNAT: Redirecionar tráfego de wg0:5432 para RDS
+sudo iptables -t nat -A PREROUTING -i wg0 -p tcp --dport 5432 \
+  -j DNAT --to-destination $RDS_IP:5432
+
+# SNAT: Garantir que tráfego de retorno passa pelo EC2
+sudo iptables -t nat -A POSTROUTING -d $RDS_IP -p tcp --dport 5432 \
+  -j MASQUERADE
+
+# Verificar regras
+sudo iptables -t nat -L PREROUTING -n -v
+sudo iptables -t nat -L POSTROUTING -n -v
+
+# Testar conectividade com RDS
+nc -zv $RDS_IP 5432
+```
+
+### Adicionar Novo Peer WireGuard (para nova região)
+
+Para adicionar um novo peer de região Fly.io no EC2:
+
+```bash
+# 1. Gerar chaves para nova região na máquina local
+wg genkey | tee nova-regiao-private.key | wg pubkey > nova-regiao-public.key
+
+# 2. SSH para EC2 e adicionar peer
+ssh -i edgeproxy-hub.pem ubuntu@54.171.48.207
+
+# 3. Adicionar peer na interface wg0 (ao vivo, sem reiniciar)
+sudo wg set wg0 peer <CHAVE_PUBLICA> allowed-ips 10.50.X.X/32 persistent-keepalive 25
+
+# 4. Atualizar arquivo de config para persistência
+sudo bash -c 'cat >> /etc/wireguard/wg0.conf << EOF
+
+# Fly.io fly-backend - NOVA_REGIAO
+[Peer]
+PublicKey = <CHAVE_PUBLICA>
+AllowedIPs = 10.50.X.X/32
+PersistentKeepalive = 25
+EOF'
+
+# 5. Verificar se peer foi adicionado
+sudo wg show wg0
+```
+
+### Verificar Conexão WireGuard do Fly.io
+
+```bash
+# Verificar se WireGuard está ativo no container
+fly ssh console -a edgeproxy-backend
+
+# Dentro do container:
+wg show
+ping -c 3 10.50.0.1
+
+# Verificar se porta RDS está alcançável via VPN
+nc -zv 10.50.0.1 5432
 ```
 
 ### App Fly.io Crasha

@@ -16,7 +16,14 @@ const sidebars: SidebarsConfig = {
       label: 'AWS',
       items: [
         'deployment/aws',
-        'deployment/aws-rds-wireguard',
+        {
+          type: 'category',
+          label: 'RDS',
+          items: [
+            'deployment/aws-rds-wireguard',
+            'deployment/rds-benchmark',
+          ],
+        },
       ],
     },
     'deployment/gcp',
