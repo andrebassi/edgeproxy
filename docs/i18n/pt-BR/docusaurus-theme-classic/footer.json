@@ -36,7 +36,7 @@
     "description": "The label of footer link with label=GitHub"
   },
   "copyright": {
-    "message": "Copyright © 2025 edge.cloud. Construído com Docusaurus.",
+    "message": "Copyright © 2025 edgeProxy.<br/>Desenvolvido e mantido por <a href=\"https://andrebassi.com.br\" target=\"_blank\" rel=\"noopener noreferrer\">André Bassi</a>",
     "description": "The footer copyright"
   }
 }

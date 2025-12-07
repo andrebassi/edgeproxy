@@ -21,6 +21,13 @@ const sidebars: SidebarsConfig = {
         'internals/load-balancer',
         'internals/client-affinity',
         'internals/node-management',
+        {
+          type: 'category',
+          label: 'Tests',
+          items: [
+            'benchmark',
+          ],
+        },
       ],
     },
   ],
