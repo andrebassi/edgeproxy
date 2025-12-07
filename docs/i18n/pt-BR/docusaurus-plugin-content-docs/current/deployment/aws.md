@@ -2,7 +2,7 @@
 sidebar_position: 3
 ---
 
-# Deploy AWS EC2
+# EC2 Deployment
 
 Este guia cobre o deploy do edgeProxy como nó POP (Point of Presence) no AWS EC2 com rede overlay WireGuard.
 
