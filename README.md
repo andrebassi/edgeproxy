@@ -31,6 +31,42 @@ Built with the same patterns used by production edge platforms like Fly.io:
 - **Connection Limits**: Soft and hard limits per backend
 - **WireGuard Overlay**: Secure communication between POPs
 
+## Architecture
+
+<p align="center">
+  <img src="assets/architecture-overview.svg" alt="edgeProxy Architecture" width="800">
+</p>
+
+### Request Flow
+
+<p align="center">
+  <img src="assets/request-flow.svg" alt="Request Flow" width="800">
+</p>
+
+1. Client TCP connection arrives at edgeProxy
+2. Check for existing binding (affinity)
+3. If no binding: resolve client region via MaxMind GeoIP
+4. Score all healthy backends within capacity
+5. Select lowest-score backend
+6. Create binding, connect via WireGuard overlay
+7. Bidirectional TCP copy (L4 passthrough)
+
+### Load Balancer Algorithm
+
+Scoring system (lower = better):
+
+```
+score = region_score * 100 + (load_factor / weight)
+
+where:
+  region_score = 0 (client region match)
+               = 1 (local POP region)
+               = 2 (fallback/other)
+
+  load_factor = current_connections / soft_limit
+  weight = configured backend weight (higher = preferred)
+```
+
 ## Quick Start
 
 ### Prerequisites
@@ -67,16 +103,6 @@ task docker-test
 task docker-logs
 ```
 
-### Fly.io (Recommended for Production)
-
-```bash
-# Deploy to Fly.io
-fly launch
-fly deploy
-```
-
-See [Fly.io Deployment Guide](https://docs.edgeproxy.io/deployment/flyio) for details.
-
 ## Configuration
 
 All configuration via environment variables:
@@ -97,48 +123,172 @@ EDGEPROXY_LISTEN_ADDR=0.0.0.0:8080 \
 ./target/release/edge-proxy
 ```
 
-## Architecture
+## Deployment
 
-```
-                    ┌──────────────────────────────────────────────────┐
-                    │           WireGuard Overlay (10.50.x.x)          │
-                    └──────────────────────────────────────────────────┘
-                              │            │            │
-┌────────┐    ┌───────────────┴──┐    ┌────┴────┐  ┌────┴────┐  ┌─────────┐
-│ Client │───▶│   edgeProxy POP  │───▶│Backend  │  │Backend  │  │Backend  │
-│ (geo)  │    │   (sa/us/eu)     │    │   SA    │  │   US    │  │   EU    │
-└────────┘    └──────────────────┘    │10.50.1.x│  │10.50.2.x│  │10.50.3.x│
-                      │               └─────────┘  └─────────┘  └─────────┘
-               ┌──────┴──────┐
-               │ routing.db  │ ◄── Replicated via Corrosion (v2)
-               └─────────────┘
-```
+### Fly.io (Recommended)
 
-### Load Balancer Algorithm
+<p align="center">
+  <img src="assets/flyio-infrastructure.svg" alt="Fly.io Infrastructure" width="800">
+</p>
 
-Scoring system (lower = better):
+Deploy globally with Fly.io's edge network:
 
-```
-score = region_score * 100 + (load_factor / weight)
+```bash
+# Launch and deploy
+fly launch
+fly deploy
 
-where:
-  region_score = 0 (client region match)
-               = 1 (local POP region)
-               = 2 (fallback/other)
+# Scale to multiple regions
+fly scale count 3 --region gru,iad,fra
 
-  load_factor = current_connections / soft_limit
-  weight = configured backend weight (higher = preferred)
+# Check status
+fly status
 ```
 
-### Request Flow
+See [Fly.io Deployment Guide](https://docs.edgeproxy.io/deployment/flyio) for details.
 
-1. Client TCP connection arrives at edgeProxy
-2. Check for existing binding (affinity)
-3. If no binding: resolve client region via MaxMind GeoIP
-4. Score all healthy backends within capacity
-5. Select lowest-score backend
-6. Create binding, connect via WireGuard overlay
-7. Bidirectional TCP copy (L4 passthrough)
+### AWS EC2
+
+<p align="center">
+  <img src="assets/aws-infrastructure.svg" alt="AWS Infrastructure" width="800">
+</p>
+
+Deploy on AWS with EC2 instances across regions:
+
+```bash
+# Cross-compile for Linux
+cargo build --release --target x86_64-unknown-linux-gnu
+
+# Deploy via SSH
+scp target/x86_64-unknown-linux-gnu/release/edge-proxy ubuntu@<ip>:/opt/edgeproxy/
+
+# Configure systemd service
+sudo systemctl enable edgeproxy
+sudo systemctl start edgeproxy
+```
+
+**Recommended Instances:**
+- `t3.micro` for dev/test
+- `c6i.large` for production
+- Deploy in: `us-east-1`, `eu-west-1`, `sa-east-1`
+
+See [AWS Deployment Guide](https://docs.edgeproxy.io/deployment/aws) for details.
+
+### Google Cloud Platform (GCP)
+
+<p align="center">
+  <img src="assets/gcp-infrastructure.svg" alt="GCP Infrastructure" width="800">
+</p>
+
+Deploy on GCP Compute Engine:
+
+```bash
+# Cross-compile for Linux
+cargo build --release --target x86_64-unknown-linux-gnu
+
+# Create VM instance
+gcloud compute instances create edgeproxy-hkg \
+  --zone=asia-east2-a \
+  --machine-type=e2-micro \
+  --image-family=ubuntu-2204-lts \
+  --image-project=ubuntu-os-cloud
+
+# Deploy binary
+gcloud compute scp target/x86_64-unknown-linux-gnu/release/edge-proxy edgeproxy-hkg:/opt/edgeproxy/
+```
+
+**Recommended Instances:**
+- `e2-micro` for dev/test (free tier eligible)
+- `n2-standard-2` for production
+- Deploy in: `us-central1`, `europe-west1`, `asia-east2`
+
+See [GCP Deployment Guide](https://docs.edgeproxy.io/deployment/gcp) for details.
+
+## WireGuard Configuration
+
+<p align="center">
+  <img src="assets/wireguard-full-mesh.svg" alt="WireGuard Full Mesh" width="800">
+</p>
+
+edgeProxy uses WireGuard as a **backhaul network** - a private, encrypted overlay that connects all POPs and backends. This is the same pattern used by Fly.io's internal network.
+
+### Why WireGuard?
+
+| Benefit | Description |
+|---------|-------------|
+| **Encryption** | All traffic between POPs is encrypted (ChaCha20-Poly1305) |
+| **Performance** | Kernel-level implementation, minimal overhead (~3% CPU) |
+| **Simplicity** | Single UDP port, no complex PKI |
+| **NAT Traversal** | Works behind firewalls and NAT |
+
+### Network Topology
+
+```
+10.50.0.0/16 - WireGuard Overlay Network
+├── 10.50.0.0/24 - POPs (edgeProxy instances)
+│   ├── 10.50.0.1 - POP SA (São Paulo)
+│   ├── 10.50.0.2 - POP US (Virginia)
+│   └── 10.50.0.3 - POP EU (Frankfurt)
+├── 10.50.1.0/24 - SA Backends
+├── 10.50.2.0/24 - US Backends
+└── 10.50.3.0/24 - EU Backends
+```
+
+### Configuration Example
+
+**POP SA (São Paulo) - /etc/wireguard/wg0.conf:**
+
+```ini
+[Interface]
+PrivateKey = <SA_PRIVATE_KEY>
+Address = 10.50.0.1/16
+ListenPort = 51820
+PostUp = sysctl -w net.ipv4.ip_forward=1
+
+# POP US
+[Peer]
+PublicKey = <US_PUBLIC_KEY>
+Endpoint = us-pop.example.com:51820
+AllowedIPs = 10.50.0.2/32, 10.50.2.0/24
+PersistentKeepalive = 25
+
+# POP EU
+[Peer]
+PublicKey = <EU_PUBLIC_KEY>
+Endpoint = eu-pop.example.com:51820
+AllowedIPs = 10.50.0.3/32, 10.50.3.0/24
+PersistentKeepalive = 25
+
+# SA Backend 1
+[Peer]
+PublicKey = <SA_BACKEND1_PUBLIC_KEY>
+AllowedIPs = 10.50.1.1/32
+```
+
+### Quick Setup
+
+```bash
+# Generate keys
+wg genkey | tee privatekey | wg pubkey > publickey
+
+# Enable WireGuard
+sudo systemctl enable wg-quick@wg0
+sudo systemctl start wg-quick@wg0
+
+# Verify connectivity
+wg show
+ping 10.50.0.2  # Ping another POP
+```
+
+### Topologies Supported
+
+| Topology | Use Case | Complexity |
+|----------|----------|------------|
+| **Hub-Spoke** | Single region with satellites | Low |
+| **Full Mesh** | Multi-region with direct connectivity | Medium |
+| **Hierarchical** | Large scale with regional hubs | High |
+
+See [WireGuard Configuration Guide](https://docs.edgeproxy.io/internals/wireguard) for complete setup instructions.
 
 ## Routing Database
 
@@ -191,6 +341,7 @@ edgeproxy/
 │   └── proxy.rs        # TCP proxy
 ├── sql/
 │   └── create_routing_db.sql
+├── assets/             # SVG diagrams
 ├── docs/               # Docusaurus documentation
 ├── docker/             # Docker configurations
 ├── fly-backend/        # Mock backend for Fly.io
@@ -207,6 +358,7 @@ edgeproxy/
 | Connection Latency | <1ms overhead |
 | Memory per 1K connections | ~10MB |
 | Binary Size | ~5MB |
+| WireGuard Overhead | ~3% CPU |
 
 ## Roadmap
 
@@ -262,6 +414,7 @@ Full documentation is available at [docs.edgeproxy.io](https://docs.edgeproxy.io
 - [Architecture](https://docs.edgeproxy.io/architecture)
 - [Configuration](https://docs.edgeproxy.io/configuration)
 - [Deployment](https://docs.edgeproxy.io/deployment/docker)
+- [WireGuard Setup](https://docs.edgeproxy.io/internals/wireguard)
 - [Internals](https://docs.edgeproxy.io/internals/load-balancer)
 - [Roadmap](https://docs.edgeproxy.io/roadmap)
 
@@ -281,6 +434,7 @@ Full documentation is available at [docs.edgeproxy.io](https://docs.edgeproxy.io
 sqlite3 routing.db "SELECT id, healthy FROM backends"
 
 # Check WireGuard connectivity
+wg show
 ping 10.50.1.1
 ```
 
@@ -291,10 +445,23 @@ ping 10.50.1.1
 sqlite3 routing.db "SELECT * FROM backends WHERE healthy=1"
 ```
 
+### WireGuard Issues
+
+```bash
+# Check interface status
+sudo wg show wg0
+
+# Check routes
+ip route | grep 10.50
+
+# Test connectivity
+ping -c 3 10.50.0.2
+```
+
 ## License
 
 [MIT](LICENSE)
 
 ## Author
 
-Developed by [Andre Bassi](https://andrebassi.com.br)
+Developed by [André Bassi](https://andrebassi.com.br)
