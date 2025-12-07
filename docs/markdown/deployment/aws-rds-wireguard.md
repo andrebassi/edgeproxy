@@ -2,7 +2,7 @@
 sidebar_position: 2
 ---
 
-# RDS via WireGuard
+# Via WireGuard
 
 This guide covers deploying a PostgreSQL database on AWS RDS and accessing it securely through a WireGuard overlay network from Fly.io edge applications.
 
@@ -20,9 +20,28 @@ This architecture enables edge applications on Fly.io to securely access a centr
 
 | Component | Type | WireGuard IP | Public/Private IP | Role |
 |-----------|------|--------------|-------------------|------|
-| **Fly.io App** | Container | 10.50.3.10/32 | dynamic | Go application (contacts-api) |
-| **EC2 Hub** | t3.micro | 10.50.0.1/24 | 34.240.78.199 | WireGuard gateway + NAT |
-| **RDS PostgreSQL** | db.t3.micro | - | 172.31.3.134 | Database |
+| **Fly.io Backend** | Container | 10.50.x.x/32 | dynamic | Go backend (multi-region) |
+| **EC2 Hub** | t3.micro | 10.50.0.1/24 | 54.171.48.207 | WireGuard gateway + NAT |
+| **RDS PostgreSQL** | db.t3.micro | - | 52.17.197.144 (public) | Database |
+
+:::tip RDS Configuration
+The RDS instance is configured as **publicly accessible** with SSL disabled (`rds.force_ssl=0`) for simplicity. In production, enable SSL and restrict access to EC2 only.
+:::
+
+### Multi-Region WireGuard IPs
+
+| Region | Code | Location | WireGuard IP |
+|--------|------|----------|--------------|
+| South America | gru | São Paulo | 10.50.1.1/32 |
+| North America | iad | Virginia | 10.50.2.1/32 |
+| North America | ord | Chicago | 10.50.2.2/32 |
+| North America | lax | Los Angeles | 10.50.2.3/32 |
+| Europe | lhr | London | 10.50.3.1/32 |
+| Europe | fra | Frankfurt | 10.50.3.2/32 |
+| Europe | cdg | Paris | 10.50.3.3/32 |
+| Asia Pacific | nrt | Tokyo | 10.50.4.1/32 |
+| Asia Pacific | sin | Singapore | 10.50.4.2/32 |
+| Asia Pacific | syd | Sydney | 10.50.4.3/32 |
 
 ### Ports
 
@@ -178,14 +197,20 @@ aws rds describe-db-instances \
 ```bash
 # EC2 Hub keys
 wg genkey | tee ec2-wg-private.key | wg pubkey > ec2-wg-public.key
-# Private: EHToyBXWXGOdh8dSngJnE9h6TGZ+VU6FLJDLnwq8Q2g=
-# Public:  Q9T4p88puHFgI8P8vLGjECvoXr85o5uncZQ2G35vE14=
+# Private: EJHudDUiTSM9ad/toMmri/6EeyBt/Tcmwc6KrvFFSXs=
+# Public:  bzM6rw/efq+75VGhBgkCRChDnKfFlXQY560ejhvKCQY=
 
-# Fly.io App keys
+# Fly.io App keys (generated per region - see Keys Reference table)
 wg genkey | tee fly-wg-private.key | wg pubkey > fly-wg-public.key
-# Private: QHgup1SNdoXT2X1SH8OoKbIhQfayX/7+lGCDNcmyPHY=
-# Public:  92tt1di3bnUt9C5JGTW6CifmkebGmzAx5A4Rv+pXaCg=
 ```
+
+:::tip Verify Keys Match
+Always verify the public key matches the private key:
+```bash
+echo "EJHudDUiTSM9ad/toMmri/6EeyBt/Tcmwc6KrvFFSXs=" | wg pubkey
+# Should output: bzM6rw/efq+75VGhBgkCRChDnKfFlXQY560ejhvKCQY=
+```
+:::
 
 ### Step 6: Create Security Group for EC2
 
@@ -228,12 +253,13 @@ chmod 400 edgeproxy-hub.pem
 
 ### Step 8: User Data Script (Cloud-Init)
 
-This script runs automatically when EC2 starts, configuring WireGuard and NAT:
+This script runs automatically when EC2 starts, configuring WireGuard with multi-region peers and NAT:
 
 ```bash
 #!/bin/bash
 # =============================================================================
 # edgeProxy Hub - EC2 Ireland - WireGuard + NAT to RDS
+# Multi-Region Configuration for fly-backend (10 regions)
 # Executed via cloud-init (User Data) - 100% non-interactive
 # =============================================================================
 set -e
@@ -251,28 +277,83 @@ apt-get update -qq
 apt-get install -y -qq wireguard dnsutils net-tools
 
 # ============================================================================
-# WIREGUARD CONFIGURATION
+# WIREGUARD CONFIGURATION - MULTI-REGION
 # ============================================================================
-echo "=== Creating WireGuard configuration ==="
+echo "=== Creating WireGuard configuration (10 regions) ==="
 mkdir -p /etc/wireguard
 
 cat > /etc/wireguard/wg0.conf << 'WGEOF'
 [Interface]
-PrivateKey = EHToyBXWXGOdh8dSngJnE9h6TGZ+VU6FLJDLnwq8Q2g=
+PrivateKey = EJHudDUiTSM9ad/toMmri/6EeyBt/Tcmwc6KrvFFSXs=
 Address = 10.50.0.1/24
 ListenPort = 51820
 
-# Enable IP forwarding and FORWARD rules
 PostUp = sysctl -w net.ipv4.ip_forward=1
 PostUp = iptables -A FORWARD -i wg0 -j ACCEPT
 PostUp = iptables -A FORWARD -o wg0 -j ACCEPT
+PostUp = iptables -t nat -A POSTROUTING -o ens5 -j MASQUERADE
 PostDown = iptables -D FORWARD -i wg0 -j ACCEPT
 PostDown = iptables -D FORWARD -o wg0 -j ACCEPT
+PostDown = iptables -t nat -D POSTROUTING -o ens5 -j MASQUERADE
 
-# Peer: Fly.io contacts-api (LHR region)
+# Fly.io fly-backend - GRU (São Paulo)
 [Peer]
-PublicKey = 92tt1di3bnUt9C5JGTW6CifmkebGmzAx5A4Rv+pXaCg=
-AllowedIPs = 10.50.3.10/32
+PublicKey = He2jX3+iEl7hUaaJG/i3YcSnStEFAcW/rs/lP0Pw+nc=
+AllowedIPs = 10.50.1.1/32
+PersistentKeepalive = 25
+
+# Fly.io fly-backend - IAD (Virginia)
+[Peer]
+PublicKey = rImgzxPu9MuhqLpcvXQ9xckSSA+AGbDOpBGvTUOwaHQ=
+AllowedIPs = 10.50.2.1/32
+PersistentKeepalive = 25
+
+# Fly.io fly-backend - ORD (Chicago)
+[Peer]
+PublicKey = SIh+oa2J6k4rYA+N1SzskwztVVR/1Hx3ef/yLyyh+VU=
+AllowedIPs = 10.50.2.2/32
+PersistentKeepalive = 25
+
+# Fly.io fly-backend - LAX (Los Angeles)
+[Peer]
+PublicKey = z7JmcJguquFBQiphSSmYBsttr6BoRs8MkCev9o5JkAU=
+AllowedIPs = 10.50.2.3/32
+PersistentKeepalive = 25
+
+# Fly.io fly-backend - LHR (London)
+[Peer]
+PublicKey = w+XApd9CmhlyweQr8Fp7YPMbjd6RAk/cmXA6OET9/H0=
+AllowedIPs = 10.50.3.1/32
+PersistentKeepalive = 25
+
+# Fly.io fly-backend - FRA (Frankfurt)
+[Peer]
+PublicKey = g5IzaRpt1hkvFhGTfy5LC0HLwPxVTC5dQb3if5sds24=
+AllowedIPs = 10.50.3.2/32
+PersistentKeepalive = 25
+
+# Fly.io fly-backend - CDG (Paris)
+[Peer]
+PublicKey = C1My7suqoLuYchPIaVLbsB5A/dX21h7wICqa7yL2oX4=
+AllowedIPs = 10.50.3.3/32
+PersistentKeepalive = 25
+
+# Fly.io fly-backend - NRT (Tokyo)
+[Peer]
+PublicKey = 9ZK9FzSzihxrRX9gktc99Oj0WFSJMa0mf33pP2LJ/lU=
+AllowedIPs = 10.50.4.1/32
+PersistentKeepalive = 25
+
+# Fly.io fly-backend - SIN (Singapore)
+[Peer]
+PublicKey = gcwoqaT950PGW1ZaUEV75VEV7HOdyYT5rwdYOUBQzR0=
+AllowedIPs = 10.50.4.2/32
+PersistentKeepalive = 25
+
+# Fly.io fly-backend - SYD (Sydney)
+[Peer]
+PublicKey = 9yHQmzbLKEyM+F1x7obbX0WNaR25XhAcUOdU9SLBeEo=
+AllowedIPs = 10.50.4.3/32
 PersistentKeepalive = 25
 WGEOF
 
@@ -291,8 +372,8 @@ wg show
 echo "=== Configuring NAT to RDS ==="
 
 # Resolve RDS IP (follow CNAME and get A record)
-RDS_IP=$(host edgeproxy-contacts-db.cfy2y00ia7ys.eu-west-1.rds.amazonaws.com \
-  | grep "has address" | awk '{print $4}' | head -1)
+# Note: RDS is publicly accessible at 52.17.197.144
+RDS_IP=$(dig +short edgeproxy-contacts-db.cfy2y00ia7ys.eu-west-1.rds.amazonaws.com | head -1)
 echo "RDS IP resolved: $RDS_IP"
 echo "$RDS_IP" > /tmp/rds_ip.txt
 
@@ -301,15 +382,13 @@ if [ -z "$RDS_IP" ]; then
     exit 1
 fi
 
-# DNAT: Traffic from WireGuard to 10.50.0.1:5432 → RDS
+# DNAT: Traffic from WireGuard to 10.50.0.1:5432 → RDS public IP
 # Packets arriving on wg0 destined to port 5432 are redirected to RDS
 iptables -t nat -A PREROUTING -i wg0 -p tcp --dport 5432 \
   -j DNAT --to-destination ${RDS_IP}:5432
 
-# SNAT/MASQUERADE: Ensures response returns through EC2
-# Packets going to RDS have source rewritten to EC2 IP
-iptables -t nat -A POSTROUTING -d ${RDS_IP} -p tcp --dport 5432 \
-  -j MASQUERADE
+# Note: MASQUERADE is already configured in wg0.conf PostUp
+# The rule "iptables -t nat -A POSTROUTING -o ens5 -j MASQUERADE" handles return traffic
 
 # ============================================================================
 # PERSIST RULES
@@ -342,7 +421,7 @@ echo "=== Testing RDS connectivity ==="
 nc -zv ${RDS_IP} 5432 && echo "RDS connection OK" || echo "RDS connection failed"
 
 echo "=== Final Status ==="
-echo "EC2 WireGuard Public Key: Q9T4p88puHFgI8P8vLGjECvoXr85o5uncZQ2G35vE14="
+echo "EC2 WireGuard Public Key: bzM6rw/efq+75VGhBgkCRChDnKfFlXQY560ejhvKCQY="
 echo "EC2 WireGuard IP: 10.50.0.1"
 echo "EC2 Public IP: $(curl -s http://169.254.169.254/latest/meta-data/public-ipv4)"
 echo "RDS NAT Target: ${RDS_IP}:5432"
@@ -353,6 +432,28 @@ echo ""
 wg show
 echo "=== Setup Complete: $(date) ==="
 ```
+
+### WireGuard Keys Reference
+
+The following table shows all WireGuard keys for the multi-region setup:
+
+| Region | Private Key | Public Key |
+|--------|-------------|------------|
+| **EC2 Hub** | `EJHudDUiTSM9ad/toMmri/6EeyBt/Tcmwc6KrvFFSXs=` | `bzM6rw/efq+75VGhBgkCRChDnKfFlXQY560ejhvKCQY=` |
+| gru | `MENNp+hWPGoRMVhbObpNLJYpgAExjbwOSajiTchwsno=` | `He2jX3+iEl7hUaaJG/i3YcSnStEFAcW/rs/lP0Pw+nc=` |
+| iad | `UHKsvajWt38Oe1D/vLrj0k7FQD7d9Tn0qtAxc+/e538=` | `rImgzxPu9MuhqLpcvXQ9xckSSA+AGbDOpBGvTUOwaHQ=` |
+| ord | `kEeHNS0OGP4Ubl78PoGw/cj7DNKJrxD4nMAm0A6bq0s=` | `SIh+oa2J6k4rYA+N1SzskwztVVR/1Hx3ef/yLyyh+VU=` |
+| lax | `kIk+cVQ1rbh/YnWUikDikNRvF1pfZ5wp4L86EZmKd3I=` | `z7JmcJguquFBQiphSSmYBsttr6BoRs8MkCev9o5JkAU=` |
+| lhr | `OIyE5jJJw+HR1K6InBSZOAsF4JwK4W32oNQZf0Y2UH8=` | `w+XApd9CmhlyweQr8Fp7YPMbjd6RAk/cmXA6OET9/H0=` |
+| fra | `iDlDxTX5YgnWdowm8o1UDNBwrLqBHZMDgPlgvbpVBnQ=` | `g5IzaRpt1hkvFhGTfy5LC0HLwPxVTC5dQb3if5sds24=` |
+| cdg | `qJOjGFQOvLYQ3PIQLGmiaPxj1cVN0XXJpwqUdpInCls=` | `C1My7suqoLuYchPIaVLbsB5A/dX21h7wICqa7yL2oX4=` |
+| nrt | `cEs2BDD01y8cvPygwcs7bW3sP2Bw5ZNxJHLvnT8/KGA=` | `9ZK9FzSzihxrRX9gktc99Oj0WFSJMa0mf33pP2LJ/lU=` |
+| sin | `SCMcReLQo154dBpnSBvNTZ/vH/nwcWad7fE5NaPz+lo=` | `gcwoqaT950PGW1ZaUEV75VEV7HOdyYT5rwdYOUBQzR0=` |
+| syd | `eI9nV+ZMP3ZvUX3EYsCpXQBueDd8apcdDRwUhpGtRWY=` | `9yHQmzbLKEyM+F1x7obbX0WNaR25XhAcUOdU9SLBeEo=` |
+
+:::warning Security
+In production, store private keys in AWS Secrets Manager or similar. Never commit private keys to version control.
+:::
 
 ### Step 9: Launch EC2
 
@@ -399,17 +500,18 @@ ssh -i edgeproxy-hub.pem ubuntu@34.240.78.199 \
 ```
 === WireGuard Status ===
 interface: wg0
-  public key: Q9T4p88puHFgI8P8vLGjECvoXr85o5uncZQ2G35vE14=
+  public key: bzM6rw/efq+75VGhBgkCRChDnKfFlXQY560ejhvKCQY=
   private key: (hidden)
   listening port: 51820
 
-peer: 92tt1di3bnUt9C5JGTW6CifmkebGmzAx5A4Rv+pXaCg=
-  allowed ips: 10.50.3.10/32
+peer: He2jX3+iEl7hUaaJG/i3YcSnStEFAcW/rs/lP0Pw+nc=
+  allowed ips: 10.50.1.1/32
   persistent keepalive: every 25 seconds
+... (10 peers total)
 
 === Configuring NAT to RDS ===
-RDS IP resolved: 172.31.3.134
-Connection to 172.31.3.134 5432 port [tcp/postgresql] succeeded!
+RDS IP resolved: 52.17.197.144
+Connection to 52.17.197.144 5432 port [tcp/postgresql] succeeded!
 RDS connection OK
 === Setup Complete ===
 ```
@@ -649,35 +751,29 @@ fly logs -a edgeproxy-contacts-api
 **Expected output:**
 
 ```
-=== Starting WireGuard ===
+=== Starting WireGuard + Backend ===
+FLY_REGION: cdg
+Configuring WireGuard with IP: 10.50.3.3/32
 [#] ip link add wg0 type wireguard
 [#] wg setconf wg0 /dev/fd/63
-[#] ip -4 address add 10.50.3.10/32 dev wg0
-[#] ip link set mtu 1340 up dev wg0
+[#] ip -4 address add 10.50.3.3/32 dev wg0
+[#] ip link set mtu 1420 up dev wg0
 [#] ip -4 route add 10.50.0.0/24 dev wg0
-=== WireGuard Status ===
+
 interface: wg0
-  public key: 92tt1di3bnUt9C5JGTW6CifmkebGmzAx5A4Rv+pXaCg=
+  public key: C1My7suqoLuYchPIaVLbsB5A/dX21h7wICqa7yL2oX4=
   private key: (hidden)
   listening port: 46637
 
-peer: Q9T4p88puHFgI8P8vLGjECvoXr85o5uncZQ2G35vE14=
-  endpoint: 34.240.78.199:51820
-  allowed ips: 10.50.0.0/24
-  latest handshake: Now
-  transfer: 92 B received, 180 B sent
+peer: bzM6rw/efq+75VGhBgkCRChDnKfFlXQY560ejhvKCQY=
+  endpoint: 54.171.48.207:51820
+  allowed ips: 10.50.0.0/24, 10.50.1.0/24, 10.50.2.0/24, 10.50.3.0/24
+  latest handshake: 1 second ago
+  transfer: 124 B received, 180 B sent
   persistent keepalive: every 25 seconds
 
-=== Testing connectivity to EC2 Hub ===
-PING 10.50.0.1 (10.50.0.1): 56 data bytes
-64 bytes from 10.50.0.1: seq=0 ttl=64 time=10.491 ms
-64 bytes from 10.50.0.1: seq=1 ttl=64 time=10.704 ms
-
-=== Starting contacts-api ===
-2025/12/07 13:22:20 Initializing Contacts API...
-2025/12/07 13:22:21 Database connected
-2025/12/07 13:22:21 Schema initialized
-2025/12/07 13:22:21 Server starting on port 8080
+Starting backend server...
+Database connected: 10.50.0.1
 ```
 
 ### Test Endpoints
@@ -850,6 +946,116 @@ go run seed.go
 
 ## Troubleshooting
 
+### Common Issues We Solved
+
+During deployment, we encountered and solved these issues:
+
+#### 1. WireGuard Handshake Failed - Wrong Public Key
+
+**Symptom:** Fly.io apps showed "connection timed out" to `10.50.0.1:5432`
+
+**Root Cause:** The EC2 public key in `entrypoint.sh` didn't match the actual EC2 WireGuard public key.
+
+**How to verify:**
+```bash
+# On EC2 - Get the ACTUAL public key from private key
+echo "EJHudDUiTSM9ad/toMmri/6EeyBt/Tcmwc6KrvFFSXs=" | wg pubkey
+# Output: bzM6rw/efq+75VGhBgkCRChDnKfFlXQY560ejhvKCQY=
+
+# Compare with what's in entrypoint.sh
+grep EC2_PUBKEY entrypoint.sh
+```
+
+**Solution:** Update `entrypoint.sh` with correct public key:
+```bash
+EC2_PUBKEY="bzM6rw/efq+75VGhBgkCRChDnKfFlXQY560ejhvKCQY="
+```
+
+#### 2. RDS Connection Refused - SSL Required
+
+**Symptom:** After WireGuard connected, got error:
+```
+FATAL: no pg_hba.conf entry for host "54.171.48.207", user "postgres", database "contacts", no encryption
+```
+
+**Root Cause:** RDS requires SSL by default (`rds.force_ssl=1`), but Go app was connecting without SSL.
+
+**Solution:** Disable SSL requirement on RDS (for dev/test):
+
+```bash
+# Create custom parameter group
+aws rds create-db-parameter-group \
+  --region eu-west-1 \
+  --db-parameter-group-name edgeproxy-nossl \
+  --db-parameter-group-family postgres15 \
+  --description "Disable SSL for edgeProxy"
+
+# Disable forced SSL
+aws rds modify-db-parameter-group \
+  --region eu-west-1 \
+  --db-parameter-group-name edgeproxy-nossl \
+  --parameters "ParameterName=rds.force_ssl,ParameterValue=0,ApplyMethod=immediate"
+
+# Apply to RDS instance
+aws rds modify-db-instance \
+  --region eu-west-1 \
+  --db-instance-identifier edgeproxy-contacts-db \
+  --db-parameter-group-name edgeproxy-nossl \
+  --apply-immediately
+
+# Reboot RDS to apply changes
+aws rds reboot-db-instance \
+  --region eu-west-1 \
+  --db-instance-identifier edgeproxy-contacts-db
+```
+
+:::warning Production
+In production, keep SSL enabled and configure the Go app with `sslmode=require` instead.
+:::
+
+#### 3. RDS Security Group - EC2 Not Allowed
+
+**Symptom:** EC2 couldn't reach RDS even directly.
+
+**Root Cause:** RDS security group didn't allow EC2's public IP.
+
+**Solution:** Add EC2 IP to RDS security group:
+```bash
+aws ec2 authorize-security-group-ingress \
+  --region eu-west-1 \
+  --group-id sg-06ad37f4e3ef49d7c \
+  --protocol tcp \
+  --port 5432 \
+  --cidr 54.171.48.207/32
+```
+
+#### 4. NAT Rules for Public RDS
+
+When RDS is **publicly accessible**, the NAT configuration is simpler:
+
+```bash
+# SSH to EC2
+ssh -i ~/.ssh/edgeproxy-key.pem ubuntu@54.171.48.207
+
+# Get RDS public IP
+RDS_IP=$(dig +short edgeproxy-contacts-db.cfy2y00ia7ys.eu-west-1.rds.amazonaws.com | head -1)
+echo "RDS IP: $RDS_IP"  # 52.17.197.144
+
+# DNAT: Redirect wg0:5432 → RDS public IP
+sudo iptables -t nat -A PREROUTING -i wg0 -p tcp --dport 5432 \
+  -j DNAT --to-destination ${RDS_IP}:5432
+
+# MASQUERADE: Source NAT for return traffic (uses ens5, not eth0)
+sudo iptables -t nat -A POSTROUTING -o ens5 -j MASQUERADE
+
+# Verify rules
+sudo iptables -t nat -L -n -v
+```
+
+**Key difference from private RDS:**
+- Public RDS: MASQUERADE on `ens5` (public interface)
+- Private RDS: MASQUERADE specifically to RDS IP on VPC interface
+
 ### WireGuard Handshake Not Happening
 
 ```bash
@@ -865,13 +1071,89 @@ sudo wg show
 ### Database Connection Fails
 
 ```bash
-# On EC2 Hub
-nc -zv 172.31.3.134 5432
+# On EC2 Hub - Check RDS connectivity
+nc -zv 52.17.197.144 5432
 
 # Check NAT rules
-sudo iptables -t nat -L -n
+sudo iptables -t nat -L -n -v
 
 # Check RDS security group allows EC2
+```
+
+### Reconfigure NAT Rules (if lost after reboot)
+
+If iptables rules were not persisted, reconfigure manually:
+
+```bash
+# SSH to EC2 Hub
+ssh -i ~/.ssh/edgeproxy-key.pem ubuntu@54.171.48.207
+
+# Get RDS public IP
+RDS_IP=$(dig +short edgeproxy-contacts-db.cfy2y00ia7ys.eu-west-1.rds.amazonaws.com | head -1)
+echo "RDS IP: $RDS_IP"  # Should be 52.17.197.144
+
+# Enable IP forwarding
+sudo sysctl -w net.ipv4.ip_forward=1
+
+# Add FORWARD rules for WireGuard
+sudo iptables -A FORWARD -i wg0 -j ACCEPT
+sudo iptables -A FORWARD -o wg0 -j ACCEPT
+
+# DNAT: Redirect traffic from wg0:5432 to RDS
+sudo iptables -t nat -A PREROUTING -i wg0 -p tcp --dport 5432 \
+  -j DNAT --to-destination $RDS_IP:5432
+
+# MASQUERADE: Source NAT on ens5 (for public RDS)
+sudo iptables -t nat -A POSTROUTING -o ens5 -j MASQUERADE
+
+# Verify rules
+sudo iptables -t nat -L PREROUTING -n -v
+sudo iptables -t nat -L POSTROUTING -n -v
+
+# Test RDS connectivity
+nc -zv $RDS_IP 5432
+```
+
+### Add New WireGuard Peer (for new region)
+
+To add a new Fly.io region peer to EC2:
+
+```bash
+# 1. Generate keys for new region on local machine
+wg genkey | tee new-region-private.key | wg pubkey > new-region-public.key
+
+# 2. SSH to EC2 and add peer
+ssh -i edgeproxy-hub.pem ubuntu@54.171.48.207
+
+# 3. Add peer to wg0 interface (live, without restart)
+sudo wg set wg0 peer <PUBLIC_KEY> allowed-ips 10.50.X.X/32 persistent-keepalive 25
+
+# 4. Update config file for persistence
+sudo bash -c 'cat >> /etc/wireguard/wg0.conf << EOF
+
+# Fly.io fly-backend - NEW_REGION
+[Peer]
+PublicKey = <PUBLIC_KEY>
+AllowedIPs = 10.50.X.X/32
+PersistentKeepalive = 25
+EOF'
+
+# 5. Verify peer was added
+sudo wg show wg0
+```
+
+### Verify WireGuard Connection from Fly.io
+
+```bash
+# Check if WireGuard is up in the container
+fly ssh console -a edgeproxy-backend
+
+# Inside the container:
+wg show
+ping -c 3 10.50.0.1
+
+# Check if RDS port is reachable through VPN
+nc -zv 10.50.0.1 5432
 ```
 
 ### Fly.io App Crashes
