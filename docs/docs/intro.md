@@ -64,3 +64,4 @@ task docker-test
 - [Architecture](./architecture) - Deep dive into system design
 - [Configuration](./configuration) - Environment variables and options
 - [Docker Deployment](./deployment/docker) - Container-based deployment
+- [Benchmark Results](./benchmark) - Performance tests across 9 global regions

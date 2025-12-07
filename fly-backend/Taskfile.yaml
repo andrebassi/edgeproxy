@@ -1,0 +1,314 @@
+version: '3'
+
+vars:
+  AWS_REGION: eu-west-1
+  INSTANCE_TYPE: t3.micro
+  AMI_ID: ami-0d940f23d527c3ab1  # Ubuntu 22.04 LTS eu-west-1
+  KEY_NAME: edgeproxy-key
+  SG_NAME: edgeproxy-sg
+  INSTANCE_NAME: edgeproxy-pop-eu
+
+env:
+  AWS_ACCESS_KEY_ID: AKIAVUNOSQ52U26NDF6J
+  AWS_SECRET_ACCESS_KEY: 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
+  AWS_DEFAULT_REGION: "{{.AWS_REGION}}"
+
+tasks:
+  # ==================== AWS Setup ====================
+
+  aws:check:
+    desc: Verificar credenciais AWS
+    cmds:
+      - aws sts get-caller-identity
+
+  aws:sg:create:
+    desc: Criar Security Group para edgeProxy
+    cmds:
+      - |
+        VPC_ID=$(aws ec2 describe-vpcs --filters "Name=is-default,Values=true" --query 'Vpcs[0].VpcId' --output text)
+        echo "VPC: $VPC_ID"
+
+        # Criar ou obter SG existente
+        SG_ID=$(aws ec2 create-security-group \
+          --group-name {{.SG_NAME}} \
+          --description "EdgeProxy - TCP proxy with WireGuard" \
+          --vpc-id $VPC_ID \
+          --query 'GroupId' --output text 2>/dev/null || \
+          aws ec2 describe-security-groups --filters "Name=group-name,Values={{.SG_NAME}}" --query 'SecurityGroups[0].GroupId' --output text)
+
+        echo "Security Group: $SG_ID"
+
+        # Adicionar regras
+        aws ec2 authorize-security-group-ingress --group-id $SG_ID --protocol tcp --port 22 --cidr 0.0.0.0/0 2>/dev/null || true
+        aws ec2 authorize-security-group-ingress --group-id $SG_ID --protocol tcp --port 8080 --cidr 0.0.0.0/0 2>/dev/null || true
+        aws ec2 authorize-security-group-ingress --group-id $SG_ID --protocol udp --port 51820 --cidr 0.0.0.0/0 2>/dev/null || true
+
+        echo "Regras: SSH(22), edgeProxy(8080), WireGuard(51820)"
+
+  aws:key:create:
+    desc: Criar Key Pair para SSH
+    cmds:
+      - |
+        mkdir -p ~/.ssh
+        aws ec2 create-key-pair \
+          --key-name {{.KEY_NAME}} \
+          --query 'KeyMaterial' \
+          --output text > ~/.ssh/{{.KEY_NAME}}.pem 2>/dev/null || echo "Key já existe"
+        chmod 600 ~/.ssh/{{.KEY_NAME}}.pem
+        echo "Key salva em: ~/.ssh/{{.KEY_NAME}}.pem"
+
+  aws:ec2:create:
+    desc: Criar instância EC2 para edgeProxy
+    deps: [aws:sg:create, aws:key:create]
+    cmds:
+      - |
+        SG_ID=$(aws ec2 describe-security-groups --filters "Name=group-name,Values={{.SG_NAME}}" --query 'SecurityGroups[0].GroupId' --output text)
+
+        # User data script para instalar tudo automaticamente
+        cat > /tmp/userdata.sh << 'USERDATA'
+        #!/bin/bash
+        set -ex
+
+        # Atualizar sistema
+        apt-get update && apt-get upgrade -y
+
+        # Instalar WireGuard
+        apt-get install -y wireguard wireguard-tools
+
+        # Instalar ferramentas
+        apt-get install -y curl wget git build-essential
+
+        # Habilitar IP forwarding
+        echo "net.ipv4.ip_forward=1" >> /etc/sysctl.conf
+        echo "net.ipv6.conf.all.forwarding=1" >> /etc/sysctl.conf
+        sysctl -p
+
+        # Criar diretório para edgeProxy
+        mkdir -p /opt/edgeproxy
+
+        echo "Setup completo!" > /opt/edgeproxy/setup-done.txt
+        USERDATA
+
+        # Criar instância
+        INSTANCE_ID=$(aws ec2 run-instances \
+          --image-id {{.AMI_ID}} \
+          --instance-type {{.INSTANCE_TYPE}} \
+          --key-name {{.KEY_NAME}} \
+          --security-group-ids $SG_ID \
+          --user-data file:///tmp/userdata.sh \
+          --tag-specifications 'ResourceType=instance,Tags=[{Key=Name,Value={{.INSTANCE_NAME}}}]' \
+          --query 'Instances[0].InstanceId' \
+          --output text)
+
+        echo "Instance ID: $INSTANCE_ID"
+        echo "Aguardando instância iniciar..."
+
+        aws ec2 wait instance-running --instance-ids $INSTANCE_ID
+
+        PUBLIC_IP=$(aws ec2 describe-instances \
+          --instance-ids $INSTANCE_ID \
+          --query 'Reservations[0].Instances[0].PublicIpAddress' \
+          --output text)
+
+        echo ""
+        echo "============================================"
+        echo "EC2 Criada com sucesso!"
+        echo "Instance ID: $INSTANCE_ID"
+        echo "Public IP: $PUBLIC_IP"
+        echo "SSH: ssh -i ~/.ssh/{{.KEY_NAME}}.pem ubuntu@$PUBLIC_IP"
+        echo "============================================"
+
+  aws:ec2:status:
+    desc: Ver status da EC2
+    cmds:
+      - |
+        aws ec2 describe-instances \
+          --filters "Name=tag:Name,Values={{.INSTANCE_NAME}}" "Name=instance-state-name,Values=running" \
+          --query 'Reservations[0].Instances[0].{ID:InstanceId,IP:PublicIpAddress,State:State.Name}' \
+          --output table
+
+  aws:ec2:ip:
+    desc: Obter IP público da EC2
+    cmds:
+      - |
+        aws ec2 describe-instances \
+          --filters "Name=tag:Name,Values={{.INSTANCE_NAME}}" "Name=instance-state-name,Values=running" \
+          --query 'Reservations[0].Instances[0].PublicIpAddress' \
+          --output text
+
+  aws:ssh:
+    desc: Conectar via SSH na EC2
+    cmds:
+      - |
+        IP=$(aws ec2 describe-instances \
+          --filters "Name=tag:Name,Values={{.INSTANCE_NAME}}" "Name=instance-state-name,Values=running" \
+          --query 'Reservations[0].Instances[0].PublicIpAddress' \
+          --output text)
+        ssh -i ~/.ssh/{{.KEY_NAME}}.pem ubuntu@$IP
+
+  # ==================== WireGuard Setup ====================
+
+  wg:config:
+    desc: Gerar configuração WireGuard para EC2
+    cmds:
+      - |
+        # Gerar chaves WireGuard
+        wg genkey | tee /tmp/wg-private.key | wg pubkey > /tmp/wg-public.key
+        PRIVATE_KEY=$(cat /tmp/wg-private.key)
+        PUBLIC_KEY=$(cat /tmp/wg-public.key)
+
+        echo "=== WireGuard Keys ==="
+        echo "Private: $PRIVATE_KEY"
+        echo "Public: $PUBLIC_KEY"
+        echo ""
+
+        # Criar config para EC2 (como servidor)
+        cat > /tmp/wg0.conf << EOF
+        [Interface]
+        PrivateKey = $PRIVATE_KEY
+        Address = 10.50.0.1/24
+        ListenPort = 51820
+        PostUp = iptables -A FORWARD -i wg0 -j ACCEPT; iptables -t nat -A POSTROUTING -o eth0 -j MASQUERADE
+        PostDown = iptables -D FORWARD -i wg0 -j ACCEPT; iptables -t nat -D POSTROUTING -o eth0 -j MASQUERADE
+
+        # Fly.io backends serão adicionados como peers
+        # Cada backend Fly.io precisará ter WireGuard configurado
+        EOF
+
+        echo "Config salva em: /tmp/wg0.conf"
+        echo ""
+        echo "Copie para EC2 com:"
+        echo "scp -i ~/.ssh/{{.KEY_NAME}}.pem /tmp/wg0.conf ubuntu@<IP>:/tmp/"
+
+  wg:deploy:
+    desc: Deploy WireGuard config para EC2
+    cmds:
+      - |
+        IP=$(aws ec2 describe-instances \
+          --filters "Name=tag:Name,Values={{.INSTANCE_NAME}}" "Name=instance-state-name,Values=running" \
+          --query 'Reservations[0].Instances[0].PublicIpAddress' \
+          --output text)
+
+        scp -i ~/.ssh/{{.KEY_NAME}}.pem /tmp/wg0.conf ubuntu@$IP:/tmp/
+        ssh -i ~/.ssh/{{.KEY_NAME}}.pem ubuntu@$IP "sudo cp /tmp/wg0.conf /etc/wireguard/ && sudo wg-quick up wg0"
+
+  # ==================== EdgeProxy Deploy ====================
+
+  build:linux:
+    desc: Compilar edgeProxy para Linux (cross-compile)
+    dir: ..
+    cmds:
+      - |
+        echo "Compilando edgeProxy para Linux..."
+        cargo build --release --target x86_64-unknown-linux-gnu 2>/dev/null || \
+        echo "Cross-compile não disponível. Use 'task deploy:binary' para compilar na EC2"
+
+  deploy:binary:
+    desc: Deploy edgeProxy binary para EC2
+    cmds:
+      - |
+        IP=$(aws ec2 describe-instances \
+          --filters "Name=tag:Name,Values={{.INSTANCE_NAME}}" "Name=instance-state-name,Values=running" \
+          --query 'Reservations[0].Instances[0].PublicIpAddress' \
+          --output text)
+
+        echo "Copiando arquivos para EC2..."
+
+        # Copiar código fonte
+        scp -i ~/.ssh/{{.KEY_NAME}}.pem -r ../src ubuntu@$IP:/opt/edgeproxy/
+        scp -i ~/.ssh/{{.KEY_NAME}}.pem ../Cargo.toml ubuntu@$IP:/opt/edgeproxy/
+        scp -i ~/.ssh/{{.KEY_NAME}}.pem ../routing.db ubuntu@$IP:/opt/edgeproxy/
+
+        # Compilar na EC2
+        ssh -i ~/.ssh/{{.KEY_NAME}}.pem ubuntu@$IP << 'EOF'
+        cd /opt/edgeproxy
+
+        # Instalar Rust se não existir
+        if ! command -v cargo &> /dev/null; then
+          curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y
+          source ~/.cargo/env
+        fi
+
+        cargo build --release
+        echo "Build completo!"
+        EOF
+
+  deploy:service:
+    desc: Criar systemd service para edgeProxy
+    cmds:
+      - |
+        IP=$(aws ec2 describe-instances \
+          --filters "Name=tag:Name,Values={{.INSTANCE_NAME}}" "Name=instance-state-name,Values=running" \
+          --query 'Reservations[0].Instances[0].PublicIpAddress' \
+          --output text)
+
+        ssh -i ~/.ssh/{{.KEY_NAME}}.pem ubuntu@$IP << 'EOF'
+        sudo tee /etc/systemd/system/edgeproxy.service << 'SERVICE'
+        [Unit]
+        Description=EdgeProxy TCP Load Balancer
+        After=network.target wireguard.target
+
+        [Service]
+        Type=simple
+        User=root
+        WorkingDirectory=/opt/edgeproxy
+        Environment=EDGEPROXY_REGION=eu
+        Environment=EDGEPROXY_LISTEN_ADDR=0.0.0.0:8080
+        Environment=RUST_LOG=info
+        ExecStart=/opt/edgeproxy/target/release/edge-proxy
+        Restart=always
+        RestartSec=5
+
+        [Install]
+        WantedBy=multi-user.target
+        SERVICE
+
+        sudo systemctl daemon-reload
+        sudo systemctl enable edgeproxy
+        sudo systemctl start edgeproxy
+        sudo systemctl status edgeproxy
+        EOF
+
+  # ==================== Full Setup ====================
+
+  setup:full:
+    desc: Setup completo - EC2 + WireGuard + edgeProxy
+    cmds:
+      - task: aws:check
+      - task: aws:ec2:create
+      - echo "Aguardando 60s para setup inicial..."
+      - sleep 60
+      - task: wg:config
+      - task: wg:deploy
+      - task: deploy:binary
+      - task: deploy:service
+      - task: aws:ec2:status
+
+  # ==================== Cleanup ====================
+
+  aws:ec2:terminate:
+    desc: Terminar instância EC2
+    cmds:
+      - |
+        INSTANCE_ID=$(aws ec2 describe-instances \
+          --filters "Name=tag:Name,Values={{.INSTANCE_NAME}}" "Name=instance-state-name,Values=running" \
+          --query 'Reservations[0].Instances[0].InstanceId' \
+          --output text)
+
+        if [ "$INSTANCE_ID" != "None" ]; then
+          aws ec2 terminate-instances --instance-ids $INSTANCE_ID
+          echo "Instância $INSTANCE_ID terminada"
+        else
+          echo "Nenhuma instância encontrada"
+        fi
+
+  aws:cleanup:
+    desc: Limpar todos os recursos AWS
+    cmds:
+      - task: aws:ec2:terminate
+      - |
+        sleep 10
+        aws ec2 delete-security-group --group-name {{.SG_NAME}} 2>/dev/null || true
+        aws ec2 delete-key-pair --key-name {{.KEY_NAME}} 2>/dev/null || true
+        rm -f ~/.ssh/{{.KEY_NAME}}.pem
+        echo "Cleanup completo!"
