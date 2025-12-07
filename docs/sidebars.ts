@@ -11,6 +11,7 @@ const sidebars: SidebarsConfig = {
     'deployment/docker',
     'deployment/flyio',
     'deployment/aws',
+    'deployment/gcp',
     'configuration',
     'benchmark',
   ],
