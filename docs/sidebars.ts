@@ -14,6 +14,7 @@ const sidebars: SidebarsConfig = {
     'deployment/aws',
     'deployment/gcp',
     'configuration',
+    'performance',
     'benchmark',
     {
       type: 'category',

@@ -1,0 +1,103 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 800 400">
+  <defs>
+    <linearGradient id="threadGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" style="stop-color:#f59e0b;stop-opacity:1" />
+      <stop offset="100%" style="stop-color:#d97706;stop-opacity:1" />
+    </linearGradient>
+    <linearGradient id="taskGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" style="stop-color:#3b82f6;stop-opacity:1" />
+      <stop offset="100%" style="stop-color:#2563eb;stop-opacity:1" />
+    </linearGradient>
+  </defs>
+
+  <!-- Background -->
+  <rect width="800" height="400" fill="#0f172a"/>
+
+  <!-- Title -->
+  <text x="400" y="35" text-anchor="middle" fill="#f8fafc" font-family="system-ui, sans-serif" font-size="18" font-weight="bold">Tokio Async Runtime</text>
+  <text x="400" y="55" text-anchor="middle" fill="#94a3b8" font-family="system-ui, sans-serif" font-size="12">Thousands of connections with minimal threads</text>
+
+  <!-- Thread Pool -->
+  <g transform="translate(50, 90)">
+    <rect x="0" y="0" width="700" height="120" rx="10" fill="rgba(30, 41, 59, 0.6)" stroke="#475569" stroke-width="1"/>
+    <text x="20" y="25" fill="#f8fafc" font-family="system-ui, sans-serif" font-size="14" font-weight="bold">Thread Pool (= CPU cores)</text>
+
+    <!-- Threads -->
+    <g transform="translate(20, 40)">
+      <rect x="0" y="0" width="150" height="60" rx="8" fill="url(#threadGrad)"/>
+      <text x="75" y="25" text-anchor="middle" fill="white" font-family="system-ui, sans-serif" font-size="12" font-weight="500">Thread 1</text>
+      <text x="75" y="45" text-anchor="middle" fill="rgba(255,255,255,0.7)" font-family="system-ui, sans-serif" font-size="10">Worker</text>
+    </g>
+
+    <g transform="translate(190, 40)">
+      <rect x="0" y="0" width="150" height="60" rx="8" fill="url(#threadGrad)"/>
+      <text x="75" y="25" text-anchor="middle" fill="white" font-family="system-ui, sans-serif" font-size="12" font-weight="500">Thread 2</text>
+      <text x="75" y="45" text-anchor="middle" fill="rgba(255,255,255,0.7)" font-family="system-ui, sans-serif" font-size="10">Worker</text>
+    </g>
+
+    <g transform="translate(360, 40)">
+      <rect x="0" y="0" width="150" height="60" rx="8" fill="url(#threadGrad)"/>
+      <text x="75" y="25" text-anchor="middle" fill="white" font-family="system-ui, sans-serif" font-size="12" font-weight="500">Thread 3</text>
+      <text x="75" y="45" text-anchor="middle" fill="rgba(255,255,255,0.7)" font-family="system-ui, sans-serif" font-size="10">Worker</text>
+    </g>
+
+    <g transform="translate(530, 40)">
+      <rect x="0" y="0" width="150" height="60" rx="8" fill="url(#threadGrad)"/>
+      <text x="75" y="25" text-anchor="middle" fill="white" font-family="system-ui, sans-serif" font-size="12" font-weight="500">Thread N</text>
+      <text x="75" y="45" text-anchor="middle" fill="rgba(255,255,255,0.7)" font-family="system-ui, sans-serif" font-size="10">Worker</text>
+    </g>
+  </g>
+
+  <!-- Tasks -->
+  <g transform="translate(50, 230)">
+    <rect x="0" y="0" width="700" height="150" rx="10" fill="rgba(30, 41, 59, 0.6)" stroke="#475569" stroke-width="1"/>
+    <text x="20" y="25" fill="#f8fafc" font-family="system-ui, sans-serif" font-size="14" font-weight="bold">Async Tasks (~200 bytes each)</text>
+
+    <!-- Task grid -->
+    <g transform="translate(20, 40)">
+      <!-- Row 1 -->
+      <rect x="0" y="0" width="60" height="40" rx="5" fill="url(#taskGrad)"/>
+      <text x="30" y="25" text-anchor="middle" fill="white" font-family="system-ui, sans-serif" font-size="10">Conn 1</text>
+
+      <rect x="70" y="0" width="60" height="40" rx="5" fill="url(#taskGrad)"/>
+      <text x="100" y="25" text-anchor="middle" fill="white" font-family="system-ui, sans-serif" font-size="10">Conn 2</text>
+
+      <rect x="140" y="0" width="60" height="40" rx="5" fill="url(#taskGrad)"/>
+      <text x="170" y="25" text-anchor="middle" fill="white" font-family="system-ui, sans-serif" font-size="10">Conn 3</text>
+
+      <rect x="210" y="0" width="60" height="40" rx="5" fill="url(#taskGrad)"/>
+      <text x="240" y="25" text-anchor="middle" fill="white" font-family="system-ui, sans-serif" font-size="10">Conn 4</text>
+
+      <rect x="280" y="0" width="60" height="40" rx="5" fill="url(#taskGrad)"/>
+      <text x="310" y="25" text-anchor="middle" fill="white" font-family="system-ui, sans-serif" font-size="10">Conn 5</text>
+
+      <rect x="350" y="0" width="60" height="40" rx="5" fill="url(#taskGrad)"/>
+      <text x="380" y="25" text-anchor="middle" fill="white" font-family="system-ui, sans-serif" font-size="10">Conn 6</text>
+
+      <rect x="420" y="0" width="60" height="40" rx="5" fill="url(#taskGrad)"/>
+      <text x="450" y="25" text-anchor="middle" fill="white" font-family="system-ui, sans-serif" font-size="10">Conn 7</text>
+
+      <rect x="490" y="0" width="60" height="40" rx="5" fill="url(#taskGrad)"/>
+      <text x="520" y="25" text-anchor="middle" fill="white" font-family="system-ui, sans-serif" font-size="10">Conn 8</text>
+
+      <text x="580" y="25" fill="#64748b" font-family="system-ui, sans-serif" font-size="20">...</text>
+
+      <rect x="610" y="0" width="60" height="40" rx="5" fill="url(#taskGrad)"/>
+      <text x="640" y="25" text-anchor="middle" fill="white" font-family="system-ui, sans-serif" font-size="10">Conn N</text>
+
+      <!-- Row 2 -->
+      <rect x="0" y="50" width="60" height="40" rx="5" fill="url(#taskGrad)" opacity="0.7"/>
+      <rect x="70" y="50" width="60" height="40" rx="5" fill="url(#taskGrad)" opacity="0.7"/>
+      <rect x="140" y="50" width="60" height="40" rx="5" fill="url(#taskGrad)" opacity="0.7"/>
+      <rect x="210" y="50" width="60" height="40" rx="5" fill="url(#taskGrad)" opacity="0.7"/>
+      <rect x="280" y="50" width="60" height="40" rx="5" fill="url(#taskGrad)" opacity="0.7"/>
+      <rect x="350" y="50" width="60" height="40" rx="5" fill="url(#taskGrad)" opacity="0.7"/>
+      <rect x="420" y="50" width="60" height="40" rx="5" fill="url(#taskGrad)" opacity="0.7"/>
+      <rect x="490" y="50" width="60" height="40" rx="5" fill="url(#taskGrad)" opacity="0.7"/>
+      <rect x="610" y="50" width="60" height="40" rx="5" fill="url(#taskGrad)" opacity="0.7"/>
+    </g>
+  </g>
+
+  <!-- Stats -->
+  <text x="400" y="395" text-anchor="middle" fill="#10b981" font-family="monospace" font-size="12">4 threads → 10,000+ concurrent connections → ~2MB memory</text>
+</svg>
