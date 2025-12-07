@@ -11,7 +11,14 @@ const sidebars: SidebarsConfig = {
     'internals/node-management',
     'deployment/docker',
     'deployment/flyio',
-    'deployment/aws',
+    {
+      type: 'category',
+      label: 'AWS',
+      items: [
+        'deployment/aws',
+        'deployment/aws-rds-wireguard',
+      ],
+    },
     'deployment/gcp',
     'configuration',
     'performance',
