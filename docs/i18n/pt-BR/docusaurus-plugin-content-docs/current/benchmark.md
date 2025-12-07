@@ -4,19 +4,23 @@ sidebar_position: 2
 
 # Benchmarks
 
-Este documento apresenta os resultados de benchmark do edgeProxy com rede overlay WireGuard em 9 localizações VPN globais.
+Este documento apresenta os resultados de benchmark do edgeProxy com rede overlay WireGuard em localizações globais.
 
 :::info Setup da Infraestrutura
 Para detalhes sobre como configurar a infraestrutura AWS EC2 e WireGuard usada nestes testes, veja [Deploy AWS EC2](./deployment/aws).
 :::
 
-## Resumo dos Resultados
+---
+
+## Benchmark v2 (Atual)
 
 :::tip Todos os Testes Passaram
-**Geo-Routing: 9/9 ✅** | **WireGuard: 10/10 peers ✅** | **Benchmark v2: Completo ✅**
+- **Geo-Routing:** 9/9
+- **WireGuard:** 10/10 peers
+- **Status:** Completo
 :::
 
-### Tabela Completa de Testes
+### Resultados dos Testes
 
 | # | Localização VPN | País | Backend | Latência | Download 1MB | Download 5MB | RPS (20) | Status |
 |---|-----------------|------|---------|----------|--------------|--------------|----------|--------|
@@ -44,16 +48,7 @@ Para detalhes sobre como configurar a infraestrutura AWS EC2 e WireGuard usada n
 
 ## Arquitetura de Teste
 
-```
-┌─────────────────────────────────────────────────────────────────────────────┐
-│                    edgeProxy + WireGuard - Teste de Produção                │
-├─────────────────────────────────────────────────────────────────────────────┤
-│                                                                             │
-│   Cliente (VPN) ──► EC2 Irlanda (edgeProxy) ──► WireGuard ──► Fly.io       │
-│                     54.171.48.207:8080          10.50.x.x    10 regiões    │
-│                                                                             │
-└─────────────────────────────────────────────────────────────────────────────┘
-```
+![Arquitetura do Benchmark](/img/benchmark-architecture.svg)
 
 ---
 
@@ -148,8 +143,36 @@ O setup de teste roteia todo tráfego pela Irlanda. Um deploy full mesh melhorar
 
 ---
 
+## Benchmark v1 (Inicial)
+
+Teste de validação inicial com regiões limitadas para verificar funcionalidade de geo-routing.
+
+:::info Escopo do Teste
+- **Regiões testadas:** 3 (foco na Europa)
+- **Objetivo:** Validar geo-routing básico e conectividade WireGuard
+:::
+
+### Resultados dos Testes
+
+| # | Localização VPN | País | Backend | Latência | Status |
+|---|-----------------|------|---------|----------|--------|
+| 1 | 🇫🇷 Paris | FR | **CDG** | ~500ms | ✅ |
+| 2 | 🇩🇪 Frankfurt | DE | **FRA** | ~520ms | ✅ |
+| 3 | 🇬🇧 Londres | GB | **LHR** | ~480ms | ✅ |
+
+### Melhorias v1 → v2
+
+| Aspecto | v1 | v2 |
+|---------|----|----|
+| Regiões testadas | 3 | 9 |
+| Métricas | Apenas latência | Latência, Download, RPS |
+| Cobertura global | Apenas Europa | 5 continentes |
+| Peers WireGuard | 3 | 10 |
+
+---
+
 ## Documentação Relacionada
 
 - [Deploy AWS EC2](./deployment/aws) - Guia de setup da infraestrutura
+- [Deploy Fly.io](./deployment/flyio) - Deploy global na edge
 - [Deploy Docker](./deployment/docker) - Desenvolvimento local
-- [Deploy Kubernetes](./deployment/kubernetes) - Deploy em K8s

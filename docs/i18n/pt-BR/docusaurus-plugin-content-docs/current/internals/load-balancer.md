@@ -2,7 +2,7 @@
 sidebar_position: 1
 ---
 
-# Internals do Load Balancer
+# Load Balancer
 
 Este documento fornece um deep dive técnico no algoritmo de balanceamento de carga do edgeProxy, sistema de pontuação e detalhes de implementação.
 

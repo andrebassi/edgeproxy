@@ -17,7 +17,10 @@ This guide covers installation, building from source, and running edgeProxy loca
 ### Optional
 
 - **Docker & Docker Compose** - For containerized deployment
-- **MaxMind GeoLite2** - For geo-routing (free registration required)
+
+:::info GeoIP Included
+The MaxMind GeoLite2 database is **embedded in the binary** - no external download required.
+:::
 
 ## Installation
 

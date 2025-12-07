@@ -2,7 +2,7 @@
 sidebar_position: 1
 ---
 
-# Load Balancer Internals
+# Load Balancer
 
 This document provides a deep technical dive into edgeProxy's load balancing algorithm, scoring system, and implementation details.
 

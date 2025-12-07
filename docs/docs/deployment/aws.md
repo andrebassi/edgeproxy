@@ -20,16 +20,7 @@ aws sts get-caller-identity
 
 ## Infrastructure Overview
 
-```
-┌─────────────────────────────────────────────────────────────────────────────┐
-│                    edgeProxy + WireGuard - Production Setup                 │
-├─────────────────────────────────────────────────────────────────────────────┤
-│                                                                             │
-│   Clients ──► EC2 (edgeProxy POP) ──► WireGuard Tunnel ──► Backends        │
-│              54.171.48.207:8080       10.50.x.x            Fly.io/K8s      │
-│                                                                             │
-└─────────────────────────────────────────────────────────────────────────────┘
-```
+![AWS Infrastructure](/img/aws-infrastructure.svg)
 
 ---
 
@@ -291,24 +282,7 @@ sudo wg show
 
 ## Network Topology
 
-```
-                           WireGuard Mesh (10.50.x.x)
-                                    │
-        ┌───────────────────────────┼───────────────────────────┐
-        │                           │                           │
-        ▼                           ▼                           ▼
-┌───────────────┐          ┌───────────────┐          ┌───────────────┐
-│  EC2 Ireland  │          │  Fly.io GRU   │          │  Fly.io NRT   │
-│  10.50.0.1    │◄────────►│  10.50.1.1    │          │  10.50.4.1    │
-│  (edgeProxy)  │          │  (backend)    │          │  (backend)    │
-└───────────────┘          └───────────────┘          └───────────────┘
-        │
-        │ All backends connect to EC2 via WireGuard
-        │
-        ├──► 10.50.2.1 (IAD) ──► 10.50.2.2 (ORD) ──► 10.50.2.3 (LAX)
-        ├──► 10.50.3.1 (LHR) ──► 10.50.3.2 (FRA) ──► 10.50.3.3 (CDG)
-        └──► 10.50.4.2 (SIN) ──► 10.50.4.3 (SYD)
-```
+![WireGuard Topology](/img/wireguard-topology.svg)
 
 ### IP Allocation
 
@@ -325,93 +299,6 @@ sudo wg show
 | Asia Pacific | NRT | 10.50.4.1 | Tokyo, Japan |
 | Asia Pacific | SIN | 10.50.4.2 | Singapore |
 | Asia Pacific | SYD | 10.50.4.3 | Sydney, Australia |
-
----
-
-## Fly.io Backend Setup
-
-### Dockerfile with WireGuard
-
-```dockerfile
-FROM golang:1.21-alpine AS builder
-WORKDIR /app
-COPY main.go .
-RUN CGO_ENABLED=0 GOOS=linux go build -ldflags="-s -w" -o backend main.go
-
-FROM alpine:3.19
-RUN apk --no-cache add ca-certificates wireguard-tools iptables ip6tables iproute2 bash
-WORKDIR /app
-COPY --from=builder /app/backend .
-COPY entrypoint.sh .
-RUN chmod +x entrypoint.sh
-
-EXPOSE 8080
-EXPOSE 51820/udp
-
-ENTRYPOINT ["./entrypoint.sh"]
-```
-
-### Entrypoint Script
-
-```bash
-#!/bin/bash
-set -e
-
-EC2_ENDPOINT="54.171.48.207:51820"
-EC2_PUBKEY="bzM6rw/efq+75VGhBgkCRChDnKfFlXQY560ejhvKCQY="
-
-# Map region to WireGuard IP
-case "${FLY_REGION}" in
-  gru) WG_IP="10.50.1.1/32"; WG_PRIVATE="<key>" ;;
-  iad) WG_IP="10.50.2.1/32"; WG_PRIVATE="<key>" ;;
-  ord) WG_IP="10.50.2.2/32"; WG_PRIVATE="<key>" ;;
-  lax) WG_IP="10.50.2.3/32"; WG_PRIVATE="<key>" ;;
-  lhr) WG_IP="10.50.3.1/32"; WG_PRIVATE="<key>" ;;
-  fra) WG_IP="10.50.3.2/32"; WG_PRIVATE="<key>" ;;
-  cdg) WG_IP="10.50.3.3/32"; WG_PRIVATE="<key>" ;;
-  nrt) WG_IP="10.50.4.1/32"; WG_PRIVATE="<key>" ;;
-  sin) WG_IP="10.50.4.2/32"; WG_PRIVATE="<key>" ;;
-  syd) WG_IP="10.50.4.3/32"; WG_PRIVATE="<key>" ;;
-  *) echo "Unknown region: ${FLY_REGION}"; exit 1 ;;
-esac
-
-# Create WireGuard config
-cat > /etc/wireguard/wg0.conf << EOF
-[Interface]
-PrivateKey = ${WG_PRIVATE}
-Address = ${WG_IP}
-
-[Peer]
-PublicKey = ${EC2_PUBKEY}
-Endpoint = ${EC2_ENDPOINT}
-AllowedIPs = 10.50.0.0/16
-PersistentKeepalive = 25
-EOF
-
-# Start WireGuard
-wg-quick up wg0
-
-# Start backend
-exec ./backend
-```
-
-### Deploy to Fly.io
-
-```bash
-cd fly-backend
-
-# Create app
-fly apps create edgeproxy-backend
-
-# Deploy to all regions
-fly deploy --remote-only
-
-# Scale to multiple regions
-fly scale count 1 --region gru,iad,ord,lax,lhr,fra,cdg,nrt,sin,syd
-
-# Verify deployment
-fly status
-```
 
 ---
 
@@ -498,6 +385,6 @@ aws ec2 describe-instance-status --instance-ids $INSTANCE_ID
 
 ## Next Steps
 
-- [Global Benchmark Tests](../benchmark) - Test results with this setup
+- [Fly.io Deployment](./flyio) - Deploy backends globally on Fly.io
+- [Benchmarks](../benchmark) - Global performance tests
 - [Docker Deployment](./docker) - Local development
-- [Kubernetes Deployment](./kubernetes) - K8s deployment

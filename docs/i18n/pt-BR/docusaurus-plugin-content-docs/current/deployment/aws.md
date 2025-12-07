@@ -20,16 +20,7 @@ aws sts get-caller-identity
 
 ## Visão Geral da Infraestrutura
 
-```
-┌─────────────────────────────────────────────────────────────────────────────┐
-│                    edgeProxy + WireGuard - Setup de Produção                │
-├─────────────────────────────────────────────────────────────────────────────┤
-│                                                                             │
-│   Clientes ──► EC2 (edgeProxy POP) ──► Túnel WireGuard ──► Backends        │
-│               54.171.48.207:8080       10.50.x.x            Fly.io/K8s     │
-│                                                                             │
-└─────────────────────────────────────────────────────────────────────────────┘
-```
+![AWS Infrastructure](/img/aws-infrastructure.svg)
 
 ---
 
@@ -253,24 +244,7 @@ sudo wg show
 
 ## Topologia de Rede
 
-```
-                           Mesh WireGuard (10.50.x.x)
-                                    │
-        ┌───────────────────────────┼───────────────────────────┐
-        │                           │                           │
-        ▼                           ▼                           ▼
-┌───────────────┐          ┌───────────────┐          ┌───────────────┐
-│  EC2 Ireland  │          │  Fly.io GRU   │          │  Fly.io NRT   │
-│  10.50.0.1    │◄────────►│  10.50.1.1    │          │  10.50.4.1    │
-│  (edgeProxy)  │          │  (backend)    │          │  (backend)    │
-└───────────────┘          └───────────────┘          └───────────────┘
-        │
-        │ Todos os backends conectam ao EC2 via WireGuard
-        │
-        ├──► 10.50.2.1 (IAD) ──► 10.50.2.2 (ORD) ──► 10.50.2.3 (LAX)
-        ├──► 10.50.3.1 (LHR) ──► 10.50.3.2 (FRA) ──► 10.50.3.3 (CDG)
-        └──► 10.50.4.2 (SIN) ──► 10.50.4.3 (SYD)
-```
+![WireGuard Topology](/img/wireguard-topology.svg)
 
 ### Alocação de IPs
 
@@ -287,49 +261,6 @@ sudo wg show
 | Ásia Pacífico | NRT | 10.50.4.1 | Tóquio, Japão |
 | Ásia Pacífico | SIN | 10.50.4.2 | Singapura |
 | Ásia Pacífico | SYD | 10.50.4.3 | Sydney, Austrália |
-
----
-
-## Setup Backend Fly.io
-
-### Dockerfile com WireGuard
-
-```dockerfile
-FROM golang:1.21-alpine AS builder
-WORKDIR /app
-COPY main.go .
-RUN CGO_ENABLED=0 GOOS=linux go build -ldflags="-s -w" -o backend main.go
-
-FROM alpine:3.19
-RUN apk --no-cache add ca-certificates wireguard-tools iptables ip6tables iproute2 bash
-WORKDIR /app
-COPY --from=builder /app/backend .
-COPY entrypoint.sh .
-RUN chmod +x entrypoint.sh
-
-EXPOSE 8080
-EXPOSE 51820/udp
-
-ENTRYPOINT ["./entrypoint.sh"]
-```
-
-### Deploy no Fly.io
-
-```bash
-cd fly-backend
-
-# Criar app
-fly apps create edgeproxy-backend
-
-# Deploy para todas as regiões
-fly deploy --remote-only
-
-# Escalar para múltiplas regiões
-fly scale count 1 --region gru,iad,ord,lax,lhr,fra,cdg,nrt,sin,syd
-
-# Verificar deploy
-fly status
-```
 
 ---
 
@@ -372,6 +303,6 @@ curl http://localhost:8080/api/info
 
 ## Próximos Passos
 
-- [Testes de Benchmark Globais](../benchmark) - Resultados dos testes com este setup
+- [Deploy Fly.io](./flyio) - Deploy dos backends globalmente no Fly.io
+- [Benchmarks](../benchmark) - Testes de performance globais
 - [Deploy Docker](./docker) - Desenvolvimento local
-- [Deploy Kubernetes](./kubernetes) - Deploy em K8s
