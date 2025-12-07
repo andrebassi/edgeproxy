@@ -1,10 +1,42 @@
 ---
-sidebar_position: 6
+sidebar_position: 2
 ---
 
-# Resultados de Benchmark
+# Testes Globais de Benchmark
 
-Este documento apresenta os resultados de benchmark do edgeProxy com rede overlay WireGuard, testado em 9 localizações VPN globais roteando para 10 regiões de backend no Fly.io.
+Este documento apresenta os resultados completos de benchmark do edgeProxy com rede overlay WireGuard, incluindo configuração da infraestrutura e resultados de testes em 9 localizações VPN globais.
+
+## Resumo dos Resultados
+
+:::tip Todos os Testes Passaram
+**Geo-Routing: 9/9 ✅** | **WireGuard: 10/10 peers ✅** | **Benchmark v2: Completo ✅**
+:::
+
+### Tabela Completa de Testes
+
+| # | Localização VPN | País | Backend | Latência | Download 1MB | Download 5MB | RPS (20) | Status |
+|---|-----------------|------|---------|----------|--------------|--------------|----------|--------|
+| 1 | 🇫🇷 Paris | FR | **CDG** | 530ms | 0.5 MB/s | 2.1 MB/s | 35.7 | ✅ |
+| 2 | 🇩🇪 Frankfurt | DE | **FRA** | 528ms | 0.6 MB/s | 2.3 MB/s | 34.0 | ✅ |
+| 3 | 🇬🇧 Londres | GB | **LHR** | 490ms | 0.6 MB/s | 2.3 MB/s | 36.6 | ✅ |
+| 4 | 🇺🇸 Detroit | US | **IAD** | 708ms | 0.6 MB/s | 2.5 MB/s | 27.4 | ✅ |
+| 5 | 🇺🇸 Las Vegas | US | **IAD** | 857ms | 0.5 MB/s | 2.2 MB/s | 22.5 | ✅ |
+| 6 | 🇯🇵 Tóquio | JP | **NRT** | 1546ms | 0.3 MB/s | 1.1 MB/s | 12.6 | ✅ |
+| 7 | 🇸🇬 Cingapura | SG | **SIN** | 1414ms | 0.3 MB/s | 1.2 MB/s | 13.8 | ✅ |
+| 8 | 🇦🇺 Sydney | AU | **SYD** | 1847ms | 0.2 MB/s | 0.9 MB/s | 10.7 | ✅ |
+| 9 | 🇧🇷 São Paulo | BR | **GRU** | 822ms | 0.4 MB/s | 1.6 MB/s | 23.3 | ✅ |
+
+### Performance por Região
+
+| Região | Latência | Observação |
+|--------|----------|------------|
+| 🇪🇺 Europa (CDG/FRA/LHR) | 490-530ms | Melhor - mais próximo da EC2 Irlanda |
+| 🇺🇸 EUA (IAD) | 708-857ms | Médio - atravessa o Atlântico |
+| 🇧🇷 Brasil (GRU) | 822ms | Bom - rota direta |
+| 🇯🇵🇸🇬 Ásia (NRT/SIN) | 1414-1546ms | Alto - distância geográfica |
+| 🇦🇺 Oceania (SYD) | 1847ms | Mais alto - meia volta ao mundo |
+
+---
 
 ## Arquitetura de Teste
 
@@ -16,217 +48,378 @@ Este documento apresenta os resultados de benchmark do edgeProxy com rede overla
 │   Cliente (VPN) ──► EC2 Irlanda (edgeProxy) ──► WireGuard ──► Fly.io       │
 │                     54.171.48.207:8080          10.50.x.x    10 regiões    │
 │                                                                             │
-├─────────────────────────────────────────────────────────────────────────────┤
-│   Geo-Routing: 9/9 ✅                                                       │
-│   Túnel WireGuard: 10/10 peers conectados ✅                                │
-│   Benchmark v2: Latência, Download, Upload, Stress ✅                       │
 └─────────────────────────────────────────────────────────────────────────────┘
 ```
 
-## Infraestrutura
+---
 
-### Servidor edgeProxy (AWS EC2)
-- **Região**: eu-west-1 (Irlanda)
-- **Instância**: t3.micro
-- **IP**: 54.171.48.207
-- **IP WireGuard**: 10.50.0.1/24
+## Configuração da Infraestrutura
 
-### Servidores Backend (Fly.io)
+### Criação do Nodo AWS EC2
 
-| Região | Localização | IP WireGuard |
-|--------|-------------|--------------|
-| GRU | São Paulo, Brasil | 10.50.1.1 |
-| IAD | Virginia, EUA | 10.50.2.1 |
-| ORD | Chicago, EUA | 10.50.2.2 |
-| LAX | Los Angeles, EUA | 10.50.2.3 |
-| LHR | Londres, Reino Unido | 10.50.3.1 |
-| FRA | Frankfurt, Alemanha | 10.50.3.2 |
-| CDG | Paris, França | 10.50.3.3 |
-| NRT | Tóquio, Japão | 10.50.4.1 |
-| SIN | Cingapura | 10.50.4.2 |
-| SYD | Sydney, Austrália | 10.50.4.3 |
+O nodo POP do edgeProxy foi criado na AWS EC2 usando automação via Taskfile:
 
-## Resultados do Benchmark
+#### Pré-requisitos
 
-### Tabela Completa de Testes
+```bash
+# AWS CLI configurado com credenciais
+export AWS_ACCESS_KEY_ID="sua-access-key"
+export AWS_SECRET_ACCESS_KEY="sua-secret-key"
+export AWS_DEFAULT_REGION="eu-west-1"
+```
 
-| # | Localização VPN | País | Backend | Latência | Download 1MB | Download 5MB | RPS (20) | Status |
-|---|-----------------|------|---------|----------|--------------|--------------|----------|--------|
-| 1 | Paris | FR | **CDG** | 530ms | 0.5 MB/s | 2.1 MB/s | 35.7 | ✅ |
-| 2 | Frankfurt | DE | **FRA** | 528ms | 0.6 MB/s | 2.3 MB/s | 34.0 | ✅ |
-| 3 | Londres | GB | **LHR** | 490ms | 0.6 MB/s | 2.3 MB/s | 36.6 | ✅ |
-| 4 | Detroit | US | **IAD** | 708ms | 0.6 MB/s | 2.5 MB/s | 27.4 | ✅ |
-| 5 | Las Vegas | US | **IAD** | 857ms | 0.5 MB/s | 2.2 MB/s | 22.5 | ✅ |
-| 6 | Tóquio | JP | **NRT** | 1546ms | 0.3 MB/s | 1.1 MB/s | 12.6 | ✅ |
-| 7 | Cingapura | SG | **SIN** | 1414ms | 0.3 MB/s | 1.2 MB/s | 13.8 | ✅ |
-| 8 | Sydney | AU | **SYD** | 1847ms | 0.2 MB/s | 0.9 MB/s | 10.7 | ✅ |
-| 9 | São Paulo | BR | **GRU** | 822ms | 0.4 MB/s | 1.6 MB/s | 23.3 | ✅ |
+#### Configuração do Taskfile
 
-### Análise de Performance por Região
+O `fly-backend/Taskfile.yaml` contém todas as tasks para infraestrutura AWS:
 
-| Região | Faixa de Latência | Observação |
-|--------|-------------------|------------|
-| Europa (CDG/FRA/LHR) | 490-530ms | Melhor - mais perto da EC2 Irlanda |
-| EUA (IAD) | 708-857ms | Médio - atravessa o Atlântico |
-| Brasil (GRU) | 822ms | Bom - rota direta |
-| Ásia (NRT/SIN) | 1414-1546ms | Alto - distância geográfica |
-| Oceania (SYD) | 1847ms | Mais alto - meia volta ao mundo |
+```yaml
+version: '3'
+
+vars:
+  AWS_REGION: eu-west-1
+  INSTANCE_TYPE: t3.micro
+  AMI_ID: ami-0d940f23d527c3ab1  # Ubuntu 22.04 LTS
+  KEY_NAME: edgeproxy-key
+  SG_NAME: edgeproxy-sg
+  INSTANCE_NAME: edgeproxy-pop-eu
+
+tasks:
+  aws:check:
+    desc: Verificar credenciais AWS
+    cmds:
+      - aws sts get-caller-identity
+
+  aws:sg:create:
+    desc: Criar Security Group para edgeProxy
+    cmds:
+      - |
+        VPC_ID=$(aws ec2 describe-vpcs --filters "Name=is-default,Values=true" \
+          --query 'Vpcs[0].VpcId' --output text)
+
+        SG_ID=$(aws ec2 create-security-group \
+          --group-name {{.SG_NAME}} \
+          --description "EdgeProxy - TCP proxy com WireGuard" \
+          --vpc-id $VPC_ID --query 'GroupId' --output text)
+
+        # SSH, edgeProxy, WireGuard
+        aws ec2 authorize-security-group-ingress --group-id $SG_ID \
+          --protocol tcp --port 22 --cidr 0.0.0.0/0
+        aws ec2 authorize-security-group-ingress --group-id $SG_ID \
+          --protocol tcp --port 8080 --cidr 0.0.0.0/0
+        aws ec2 authorize-security-group-ingress --group-id $SG_ID \
+          --protocol udp --port 51820 --cidr 0.0.0.0/0
+
+  aws:ec2:create:
+    desc: Criar instância EC2 para edgeProxy POP
+    cmds:
+      - |
+        INSTANCE_ID=$(aws ec2 run-instances \
+          --image-id {{.AMI_ID}} \
+          --instance-type {{.INSTANCE_TYPE}} \
+          --key-name {{.KEY_NAME}} \
+          --security-group-ids $SG_ID \
+          --user-data file://userdata.sh \
+          --tag-specifications 'ResourceType=instance,Tags=[{Key=Name,Value={{.INSTANCE_NAME}}}]' \
+          --query 'Instances[0].InstanceId' --output text)
+
+        aws ec2 wait instance-running --instance-ids $INSTANCE_ID
+```
+
+#### Criando a Instância EC2
+
+```bash
+# Navegar para o diretório fly-backend
+cd fly-backend
+
+# 1. Verificar credenciais AWS
+task aws:check
+
+# 2. Criar Security Group
+task aws:sg:create
+
+# 3. Criar Par de Chaves SSH
+task aws:key:create
+
+# 4. Criar Instância EC2
+task aws:ec2:create
+
+# Saída:
+# Instance ID: i-0813ee3c789b40e51
+# Public IP: 54.171.48.207
+# SSH: ssh -i ~/.ssh/edgeproxy-key.pem ubuntu@54.171.48.207
+```
+
+#### Script de User Data (Auto-Instalação)
+
+A instância EC2 auto-instala WireGuard e dependências via user data:
+
+```bash
+#!/bin/bash
+set -ex
+
+# Atualizar sistema
+apt-get update && apt-get upgrade -y
+
+# Instalar WireGuard
+apt-get install -y wireguard wireguard-tools
+
+# Instalar ferramentas de build
+apt-get install -y curl wget git build-essential pkg-config libssl-dev
+
+# Habilitar IP forwarding
+echo "net.ipv4.ip_forward=1" >> /etc/sysctl.conf
+echo "net.ipv6.conf.all.forwarding=1" >> /etc/sysctl.conf
+sysctl -p
+
+# Criar diretório do edgeProxy
+mkdir -p /opt/edgeproxy
+
+# Instalar Rust
+curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y
+```
+
+---
+
+### Configuração do WireGuard
+
+#### Gerando Chaves
+
+```bash
+# Gerar chaves para EC2 (servidor central)
+wg genkey > wireguard/ec2-private.key
+cat wireguard/ec2-private.key | wg pubkey > wireguard/ec2-public.key
+
+# Gerar chaves para cada região do Fly.io
+for region in gru iad ord lax lhr fra cdg nrt sin syd; do
+  wg genkey > wireguard/${region}-private.key
+  cat wireguard/${region}-private.key | wg pubkey > wireguard/${region}-public.key
+done
+```
+
+#### Configuração do Servidor WireGuard EC2
+
+```ini
+[Interface]
+PrivateKey = <chave-privada-ec2>
+Address = 10.50.0.1/24
+ListenPort = 51820
+PostUp = iptables -A FORWARD -i wg0 -j ACCEPT; iptables -t nat -A POSTROUTING -o ens5 -j MASQUERADE
+PostDown = iptables -D FORWARD -i wg0 -j ACCEPT; iptables -t nat -D POSTROUTING -o ens5 -j MASQUERADE
+
+# GRU - São Paulo (América do Sul)
+[Peer]
+PublicKey = <chave-publica-gru>
+AllowedIPs = 10.50.1.1/32
+
+# IAD - Virginia (América do Norte)
+[Peer]
+PublicKey = <chave-publica-iad>
+AllowedIPs = 10.50.2.1/32
+
+# ... (todos os 10 peers)
+```
+
+#### Iniciando o WireGuard
+
+```bash
+# Na EC2
+sudo cp wg0.conf /etc/wireguard/
+sudo wg-quick up wg0
+
+# Verificar
+sudo wg show
+```
+
+---
+
+### Deploy do Backend Fly.io
+
+#### Dockerfile com WireGuard
+
+```dockerfile
+FROM golang:1.21-alpine AS builder
+WORKDIR /app
+COPY main.go .
+RUN CGO_ENABLED=0 GOOS=linux go build -ldflags="-s -w" -o backend main.go
+
+FROM alpine:3.19
+RUN apk --no-cache add ca-certificates wireguard-tools iptables ip6tables iproute2 bash
+WORKDIR /app
+COPY --from=builder /app/backend .
+COPY entrypoint.sh .
+RUN chmod +x entrypoint.sh
+
+EXPOSE 8080
+EXPOSE 51820/udp
+
+ENTRYPOINT ["./entrypoint.sh"]
+```
+
+#### Script de Entrypoint
+
+O script de entrypoint configura o WireGuard baseado na região do Fly.io:
+
+```bash
+#!/bin/bash
+set -e
+
+EC2_ENDPOINT="54.171.48.207:51820"
+EC2_PUBKEY="bzM6rw/efq+75VGhBgkCRChDnKfFlXQY560ejhvKCQY="
+
+# Mapear região para IP WireGuard
+case "${FLY_REGION}" in
+  gru) WG_IP="10.50.1.1/32"; WG_PRIVATE="<chave>" ;;
+  iad) WG_IP="10.50.2.1/32"; WG_PRIVATE="<chave>" ;;
+  # ... outras regiões
+esac
+
+# Criar configuração WireGuard
+cat > /etc/wireguard/wg0.conf << EOF
+[Interface]
+PrivateKey = ${WG_PRIVATE}
+Address = ${WG_IP}
+
+[Peer]
+PublicKey = ${EC2_PUBKEY}
+Endpoint = ${EC2_ENDPOINT}
+AllowedIPs = 10.50.0.0/16
+PersistentKeepalive = 25
+EOF
+
+# Iniciar WireGuard
+wg-quick up wg0
+
+# Iniciar backend
+exec ./backend
+```
+
+#### Deploy para Fly.io
+
+```bash
+cd fly-backend
+fly deploy --remote-only
+
+# Saída: 10/10 máquinas implantadas e saudáveis
+```
+
+---
+
+### Topologia da Rede WireGuard
+
+```
+                           Malha WireGuard (10.50.x.x)
+                                    │
+        ┌───────────────────────────┼───────────────────────────┐
+        │                           │                           │
+        ▼                           ▼                           ▼
+┌───────────────┐          ┌───────────────┐          ┌───────────────┐
+│  EC2 Irlanda  │          │  Fly.io GRU   │          │  Fly.io NRT   │
+│  10.50.0.1    │◄────────►│  10.50.1.1    │          │  10.50.4.1    │
+│  (edgeProxy)  │          │  (backend)    │          │  (backend)    │
+└───────────────┘          └───────────────┘          └───────────────┘
+        │
+        │ Todos os backends Fly.io conectam à EC2
+        │
+        ├──► 10.50.2.1 (IAD) ──► 10.50.2.2 (ORD) ──► 10.50.2.3 (LAX)
+        ├──► 10.50.3.1 (LHR) ──► 10.50.3.2 (FRA) ──► 10.50.3.3 (CDG)
+        └──► 10.50.4.2 (SIN) ──► 10.50.4.3 (SYD)
+```
+
+| Região | Código | IP WireGuard | Localização |
+|--------|--------|--------------|-------------|
+| América do Sul | GRU | 10.50.1.1 | São Paulo, Brasil |
+| América do Norte | IAD | 10.50.2.1 | Virginia, EUA |
+| América do Norte | ORD | 10.50.2.2 | Chicago, EUA |
+| América do Norte | LAX | 10.50.2.3 | Los Angeles, EUA |
+| Europa | LHR | 10.50.3.1 | Londres, Reino Unido |
+| Europa | FRA | 10.50.3.2 | Frankfurt, Alemanha |
+| Europa | CDG | 10.50.3.3 | Paris, França |
+| Ásia Pacífico | NRT | 10.50.4.1 | Tóquio, Japão |
+| Ásia Pacífico | SIN | 10.50.4.2 | Cingapura |
+| Ásia Pacífico | SYD | 10.50.4.3 | Sydney, Austrália |
+
+---
 
 ## Validação do Geo-Routing
 
-Todos os 9 testes VPN rotearam corretamente para o backend esperado baseado na localização geográfica do cliente:
+Todos os 9 testes VPN rotearam corretamente para o backend esperado:
 
-| Localização do Cliente | Backend Esperado | Backend Real | Resultado |
-|------------------------|------------------|--------------|-----------|
-| França (FR) | CDG | CDG | ✅ |
-| Alemanha (DE) | FRA | FRA | ✅ |
-| Reino Unido (GB) | LHR | LHR | ✅ |
-| Estados Unidos (US) | IAD | IAD | ✅ |
-| Japão (JP) | NRT | NRT | ✅ |
-| Cingapura (SG) | SIN | SIN | ✅ |
-| Austrália (AU) | SYD | SYD | ✅ |
-| Brasil (BR) | GRU | GRU | ✅ |
+| Localização do Cliente | Esperado | Real | Resultado |
+|------------------------|----------|------|-----------|
+| 🇫🇷 França | CDG | CDG | ✅ |
+| 🇩🇪 Alemanha | FRA | FRA | ✅ |
+| 🇬🇧 Reino Unido | LHR | LHR | ✅ |
+| 🇺🇸 Estados Unidos | IAD | IAD | ✅ |
+| 🇯🇵 Japão | NRT | NRT | ✅ |
+| 🇸🇬 Cingapura | SIN | SIN | ✅ |
+| 🇦🇺 Austrália | SYD | SYD | ✅ |
+| 🇧🇷 Brasil | GRU | GRU | ✅ |
 
-## Status do Túnel WireGuard
+---
 
-Todos os 10 backends Fly.io estabeleceram túneis WireGuard com sucesso para o servidor EC2:
+## Executando Seus Próprios Testes
 
-```
-interface: wg0
-  public key: bzM6rw/efq+75VGhBgkCRChDnKfFlXQY560ejhvKCQY=
-  listening port: 51820
+### Teste Rápido de Latência
 
-peer: He2jX3+iEl7hUaaJG/i3YcSnStEFAcW/rs/lP0Pw+nc= (GRU)
-  allowed ips: 10.50.1.1/32
-  latest handshake: 18 seconds ago ✅
-
-peer: rImgzxPu9MuhqLpcvXQ9xckSSA+AGbDOpBGvTUOwaHQ= (IAD)
-  allowed ips: 10.50.2.1/32
-  latest handshake: 15 seconds ago ✅
-
-... (todos os 10 peers conectados)
+```bash
+for i in {1..10}; do
+  curl -w "%{time_total}s\n" -o /dev/null -s http://54.171.48.207:8080/api/latency
+done
 ```
 
-## Metodologia de Teste
+### Verificar Geo-Routing
 
-### Teste de Latência
-- 20 requisições HTTP sequenciais para o endpoint `/api/latency`
-- Mede o tempo de ida e volta do cliente ao backend via proxy
-- Reporta: Latência Média, Mínima e Máxima
+```bash
+curl -s http://54.171.48.207:8080/api/info | jq .
+# Retorna: {"region":"cdg","region_name":"Paris, France",...}
+```
 
-### Teste de Download
-- Requisições HTTP GET para o endpoint `/api/download?size=N`
-- Testes com arquivos de 1MB e 5MB
-- Mede: Velocidade de download em MB/s
+### Teste de Velocidade de Download
 
-### Teste de Requisições Concorrentes
-- 20 requisições HTTP paralelas
-- Mede: Tempo total e Requisições Por Segundo (RPS)
+```bash
+# Download de 1MB
+curl -w "Velocidade: %{speed_download} B/s\n" -o /dev/null -s \
+  "http://54.171.48.207:8080/api/download?size=1048576"
+
+# Download de 5MB
+curl -w "Velocidade: %{speed_download} B/s\n" -o /dev/null -s \
+  "http://54.171.48.207:8080/api/download?size=5242880"
+```
+
+### Script Completo de Benchmark
+
+Use o script fornecido em `scripts/benchmark.sh`:
+
+```bash
+./scripts/benchmark.sh http://54.171.48.207:8080
+```
+
+---
 
 ## Endpoints de Benchmark
 
-O backend v2 fornece os seguintes endpoints de teste:
-
 | Endpoint | Descrição |
 |----------|-----------|
-| `/api/info` | Info do servidor (região, uptime, requisições) |
+| `/` | Banner ASCII art com info da região |
+| `/api/info` | Info JSON do servidor (região, uptime, requisições) |
 | `/api/latency` | Resposta mínima para teste de latência |
 | `/api/download?size=N` | Teste de download (N bytes, máx 100MB) |
 | `/api/upload` | Teste de upload (corpo POST) |
 | `/api/stats` | Estatísticas do servidor |
 | `/benchmark` | Página HTML interativa de benchmark |
 
-## Executando Seu Próprio Benchmark
-
-### Testes Rápidos
-
-```bash
-# Teste rápido de latência
-for i in {1..10}; do
-  curl -w "%{time_total}s\n" -o /dev/null -s http://54.171.48.207:8080/api/latency
-done
-
-# Teste de download (1MB)
-curl -w "Velocidade: %{speed_download} B/s\n" -o /dev/null -s \
-  "http://54.171.48.207:8080/api/download?size=1048576"
-
-# Verificar geo-routing
-curl -s http://54.171.48.207:8080/api/info | jq .
-```
-
-### Script Completo de Benchmark
-
-Este é o script usado para gerar a tabela de resultados do benchmark:
-
-```bash
-#!/bin/bash
-# benchmark.sh - Suite completa de benchmark do edgeProxy
-# Uso: ./benchmark.sh <url-do-proxy>
-
-PROXY_URL="${1:-http://54.171.48.207:8080}"
-
-echo "=== edgeProxy Benchmark V2 ==="
-echo "Alvo: $PROXY_URL"
-echo ""
-
-# 1. Verificação de Região
-echo "1. Verificação de Região:"
-curl -s "$PROXY_URL/api/info" | python3 -m json.tool
-echo ""
-
-# 2. Teste de Latência
-echo "2. Teste de Latência (20 pings):"
-latencies=()
-for i in {1..20}; do
-  start=$(python3 -c "import time: print(int(time.time()*1000))")
-  curl -s "$PROXY_URL/api/latency" > /dev/null
-  end=$(python3 -c "import time: print(int(time.time()*1000))")
-  latency=$((end - start))
-  latencies+=($latency)
-  printf "  Ping %2d: %dms\n" $i $latency
-done
-total=0; for l in "${latencies[@]}"; do total=$((total + l)); done
-avg=$((total / 20))
-min=$(printf '%s\n' "${latencies[@]}" | sort -n | head -1)
-max=$(printf '%s\n' "${latencies[@]}" | sort -n | tail -1)
-echo "  ────────────────"
-echo "  Média: ${avg}ms | Mín: ${min}ms | Máx: ${max}ms"
-echo ""
-
-# 3. Teste de Download (1MB)
-echo "3. Teste de Download (1MB):"
-curl -w "  Baixado: %{size_download} bytes | Tempo: %{time_total}s | Velocidade: %{speed_download} B/s\n" \
-  -o /dev/null -s "$PROXY_URL/api/download?size=1048576"
-
-# 4. Teste de Download (5MB)
-echo "4. Teste de Download (5MB):"
-curl -w "  Baixado: %{size_download} bytes | Tempo: %{time_total}s | Velocidade: %{speed_download} B/s\n" \
-  -o /dev/null -s "$PROXY_URL/api/download?size=5242880"
-
-# 5. Requisições Concorrentes
-echo "5. Requisições Concorrentes (20 paralelas):"
-start=$(python3 -c "import time: print(int(time.time()*1000))")
-for i in {1..20}; do
-  curl -s "$PROXY_URL/api/latency" > /dev/null &
-done
-wait
-end=$(python3 -c "import time: print(int(time.time()*1000))")
-echo "  20 requisições em $((end - start))ms | RPS: $(python3 -c "print(f'{20000/$((end - start)):.1f}')")"
-
-echo ""
-echo "=== Benchmark Completo ==="
-```
+---
 
 ## Conclusões
 
-1. **Geo-Routing**: 100% de precisão no roteamento de clientes para o backend regional correto
+1. **Geo-Routing**: 100% de precisão roteando clientes para o backend regional correto
 2. **WireGuard**: Túneis estáveis com todos os 10 backends globais
-3. **Performance**: Latência escala previsivelmente com a distância geográfica
+3. **Performance**: Latência escala previsivelmente com distância geográfica
 4. **Confiabilidade**: Todos os testes passaram com resultados consistentes
 
-### Performance Esperada em Produção
+### Deploy de Produção
 
-Em produção com múltiplos POPs edgeProxy implantados globalmente (não apenas na Irlanda):
+Para produção, faça deploy de POPs edgeProxy em múltiplas regiões:
 
 | Cenário | Latência Esperada |
 |---------|-------------------|
@@ -234,4 +427,4 @@ Em produção com múltiplos POPs edgeProxy implantados globalmente (não apenas
 | Cliente → POP Local → Backend Regional | 20-50ms |
 | Cliente → POP Local → Backend Remoto | 50-150ms |
 
-O setup de teste atual roteia todo o tráfego através da Irlanda, o que adiciona latência para clientes distantes. Uma implantação em malha completa melhoraria significativamente a performance para todas as regiões.
+A configuração de teste roteia todo o tráfego pela Irlanda. Um deploy em malha completa melhoraria significativamente a performance global.
