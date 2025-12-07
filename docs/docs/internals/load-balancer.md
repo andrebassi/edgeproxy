@@ -10,12 +10,22 @@ This document provides a deep technical dive into edgeProxy's load balancing alg
 
 edgeProxy uses a **weighted scoring algorithm** that considers:
 
-1. Geographic proximity (region matching)
-2. Current backend load (connection count)
-3. Backend capacity (soft/hard limits)
-4. Configured weights
+1. **Country-based routing** (exact country match - highest priority)
+2. **Region-based routing** (continental region matching)
+3. Current backend load (connection count)
+4. Backend capacity (soft/hard limits)
+5. Configured weights
 
 The goal is to route traffic to the "best" backend where best = lowest score.
+
+## GeoIP Database
+
+The MaxMind GeoLite2-Country database is **embedded directly into the binary** at compile time using Rust's `include_bytes!` macro. This means:
+
+- No external database file needed at runtime
+- Single binary deployment
+- Automatic geo-routing without configuration
+- Optional override via `EDGEPROXY_GEOIP_PATH` environment variable
 
 ## Scoring Algorithm
 
@@ -30,23 +40,39 @@ where:
   weight = backend weight (1-10, higher receives more traffic)
 ```
 
-### Region Score
+### Geo Score (Country + Region)
+
+The geo scoring system prioritizes **country** first, then **region**, ensuring users are routed to the geographically closest backend:
 
 | Condition | Score | Description |
 |-----------|-------|-------------|
-| Client region == Backend region | 0 | Best match - same region |
-| Backend region == Local POP region | 1 | Good match - local region |
-| Other | 2 | Fallback - cross-region |
+| Client country == Backend country | 0 | Best match - same country (e.g., FR → CDG) |
+| Client region == Backend region | 1 | Good match - same region (e.g., FR → any EU) |
+| Backend region == Local POP region | 2 | Local POP region |
+| Other | 3 | Fallback - cross-region |
 
 **Example:**
 
 ```
-Client from Brazil connecting to SA POP:
-├── sa-node-1 (region=sa) → region_score = 0 (client match)
-├── sa-node-2 (region=sa) → region_score = 0 (client match)
-├── us-node-1 (region=us) → region_score = 2 (fallback)
-└── eu-node-1 (region=eu) → region_score = 2 (fallback)
+Client from France (country=FR, region=eu) connecting:
+├── fly-cdg-1 (country=FR, region=eu) → geo_score = 0 (country match!)
+├── fly-fra-1 (country=DE, region=eu) → geo_score = 1 (region match)
+├── fly-lhr-1 (country=GB, region=eu) → geo_score = 1 (region match)
+├── fly-iad-1 (country=US, region=us) → geo_score = 3 (fallback)
+└── fly-nrt-1 (country=JP, region=ap) → geo_score = 3 (fallback)
 ```
+
+### Country to Region Mapping
+
+The following countries are mapped to regions:
+
+| Region | Countries |
+|--------|-----------|
+| **sa** (South America) | BR, AR, CL, PE, CO, UY, PY, BO, EC |
+| **us** (North America) | US, CA, MX |
+| **eu** (Europe) | PT, ES, FR, DE, NL, IT, GB, IE, BE, CH, AT, PL, CZ, SE, NO, DK, FI |
+| **ap** (Asia Pacific) | JP, KR, TW, HK, SG, MY, TH, VN, ID, PH, AU, NZ |
+| **us** (Fallback) | All other countries |
 
 ### Load Factor
 
@@ -106,6 +132,7 @@ pub fn pick_backend(
     backends: &[Backend],
     local_region: &str,
     client_region: Option<&str>,
+    client_country: Option<&str>,  // NEW: country-based routing
     metrics: &DashMap<String, BackendMetrics>,
 ) -> Option<Backend> {
     let mut best: Option<(Backend, f64)> = None;
@@ -127,18 +154,23 @@ pub fn pick_backend(
             continue;
         }
 
-        // Calculate region score
-        let region_score: u64 = match client_region {
-            Some(cr) if cr == b.region => 0,  // Client region match
-            _ if b.region == local_region => 1, // Local POP region
-            _ => 2,                            // Fallback
+        // Calculate geo score (country > region > local > fallback)
+        let geo_score = if client_country.is_some()
+            && Some(b.country.as_str()) == client_country {
+            0.0 // Best: same country (FR → CDG)
+        } else if Some(b.region.as_str()) == client_region {
+            1.0 // Good: same region (FR → any EU)
+        } else if b.region == local_region {
+            2.0 // OK: local POP region
+        } else {
+            3.0 // Fallback: cross-region
         };
 
         // Calculate load factor
         let load_factor = conns as f64 / b.soft_limit as f64;
 
         // Final score (lower is better)
-        let score = (region_score * 100) as f64 + (load_factor / b.weight as f64);
+        let score = geo_score * 100.0 + (load_factor / b.weight as f64);
 
         // Update best if this is better
         match &best {
@@ -306,12 +338,62 @@ DEBUG edge_proxy::proxy: proxying 10.0.0.1 -> sa-node-1 (10.50.1.1:8080)
 DEBUG edge_proxy::lb: scores: sa-node-1=0.3, sa-node-2=0.2, selected=sa-node-2
 ```
 
+## Geo-Routing Benchmark Results
+
+The following benchmark was conducted on **2025-12-07** using VPN connections from multiple countries to validate the geo-routing algorithm with 10 Fly.io backends deployed globally.
+
+### Test Environment
+
+- **edgeProxy version**: 0.1.0
+- **GeoIP Database**: MaxMind GeoLite2-Country (embedded)
+- **Backends**: 10 nodes across 4 regions (sa, us, eu, ap)
+- **Test method**: VPN connection from each country, `curl localhost:8080`
+
+### Results: 9/9 Tests Passed (100%)
+
+| # | VPN Location | Country | Expected Backend | Actual Result | Status |
+|---|--------------|---------|------------------|---------------|--------|
+| 1 | Paris, France | FR | CDG | CDG | PASS |
+| 2 | Frankfurt, Germany | DE | FRA | FRA | PASS |
+| 3 | London, UK | GB | LHR | LHR | PASS |
+| 4 | Detroit, USA | US | IAD | IAD | PASS |
+| 5 | Las Vegas, USA | US | IAD | IAD | PASS |
+| 6 | Tokyo, Japan | JP | NRT | NRT | PASS |
+| 7 | Singapore | SG | SIN | SIN | PASS |
+| 8 | Sydney, Australia | AU | SYD | SYD | PASS |
+| 9 | Sao Paulo, Brazil | BR | GRU | GRU | PASS |
+
+### Key Observations
+
+1. **Country-based routing works correctly**: France routes to CDG (Paris), Germany to FRA (Frankfurt), UK to LHR (London)
+2. **Region fallback works**: Multiple US locations (Detroit, Las Vegas) correctly fall back to IAD since all US backends have the same country code
+3. **VPN change detection**: The proxy automatically detects VPN/country changes and clears client bindings
+4. **Embedded GeoIP**: No external database file needed - MaxMind DB is compiled into the binary
+
+### Backend Configuration
+
+```
+| Backend ID   | Country | Region | Location           |
+|--------------|---------|--------|-------------------|
+| fly-gru-1    | BR      | sa     | Sao Paulo, Brazil |
+| fly-iad-1    | US      | us     | Virginia, USA     |
+| fly-ord-1    | US      | us     | Chicago, USA      |
+| fly-lax-1    | US      | us     | Los Angeles, USA  |
+| fly-lhr-1    | GB      | eu     | London, UK        |
+| fly-fra-1    | DE      | eu     | Frankfurt, Germany|
+| fly-cdg-1    | FR      | eu     | Paris, France     |
+| fly-nrt-1    | JP      | ap     | Tokyo, Japan      |
+| fly-sin-1    | SG      | ap     | Singapore         |
+| fly-syd-1    | AU      | ap     | Sydney, Australia |
+```
+
 ## Future Improvements
 
 1. **Latency-based routing**: Include RTT in score
 2. **Adaptive weights**: Auto-adjust based on error rates
 3. **Circuit breaker**: Temporary exclusion on failures
 4. **Consistent hashing**: For stateful backends
+5. **City/State-level routing**: For large countries like US, route to closest regional backend
 
 ## Next Steps
 

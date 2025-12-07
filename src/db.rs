@@ -10,12 +10,13 @@ fn row_to_backend(row: &Row) -> rusqlite::Result<Backend> {
         id: row.get(0)?,
         app: row.get(1)?,
         region: row.get(2)?,
-        wg_ip: row.get(3)?,
-        port: row.get::<_, i64>(4)? as u16,
-        healthy: row.get::<_, i64>(5)? != 0,
-        weight: row.get::<_, i64>(6)? as u8,
-        soft_limit: row.get::<_, i64>(7)? as u32,
-        hard_limit: row.get::<_, i64>(8)? as u32,
+        country: row.get(3)?,
+        wg_ip: row.get(4)?,
+        port: row.get::<_, i64>(5)? as u16,
+        healthy: row.get::<_, i64>(6)? != 0,
+        weight: row.get::<_, i64>(7)? as u8,
+        soft_limit: row.get::<_, i64>(8)? as u32,
+        hard_limit: row.get::<_, i64>(9)? as u32,
     })
 }
 
@@ -23,7 +24,7 @@ fn load_routing_state_from_sqlite(db_path: &str, version: u64) -> Result<Routing
     let conn = Connection::open(db_path)?;
 
     let mut stmt = conn.prepare(
-        "SELECT id, app, region, wg_ip, port, healthy, weight, soft_limit, hard_limit          FROM backends          WHERE deleted IS NULL OR deleted = 0",
+        "SELECT id, app, region, country, wg_ip, port, healthy, weight, soft_limit, hard_limit FROM backends WHERE deleted IS NULL OR deleted = 0",
     )?;
 
     let rows = stmt.query_map([], |row| row_to_backend(row))?;

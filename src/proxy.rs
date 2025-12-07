@@ -1,12 +1,13 @@
 use crate::lb::{pick_backend, BackendMetrics};
 use crate::model::{Binding, ClientKey};
-use crate::state::RcProxyState;
+use crate::state::{RcProxyState, fetch_public_ip, GeoInfo};
 use std::net::SocketAddr;
 use std::time::Instant;
 use tokio::io::{self, AsyncWriteExt};
 use tokio::net::{TcpListener, TcpStream};
 use tokio::task;
 use std::sync::atomic::Ordering;
+
 
 pub async fn run_tcp_proxy(state: RcProxyState, listen_addr: String) -> anyhow::Result<()> {
     let listener = TcpListener::bind(&listen_addr).await?;
@@ -26,18 +27,56 @@ pub async fn run_tcp_proxy(state: RcProxyState, listen_addr: String) -> anyhow::
 
 async fn handle_connection(
     state: RcProxyState,
-    mut client_stream: TcpStream,
+    client_stream: TcpStream,
     client_addr: SocketAddr,
 ) -> anyhow::Result<()> {
     let client_ip = client_addr.ip();
     let client_key = ClientKey { client_ip };
     let now = Instant::now();
 
-    // Região inferida via MaxMind (se disponível)
-    let client_region = state
-        .geo
-        .as_ref()
-        .and_then(|g| g.region_for_ip(client_ip));
+    // For localhost clients, use public IP for geo routing
+    // Always re-check public IP to support VPN switching during testing
+    let client_geo: Option<GeoInfo> = if client_ip.is_loopback() {
+        let new_geo = if let Some(public_ip) = fetch_public_ip().await {
+            let geo_info = state.geo.as_ref()
+                .and_then(|g| g.lookup_ip(public_ip))
+                .map(|(country, region)| GeoInfo { country, region });
+
+            // Check if geo changed (VPN switch)
+            let cached = state.public_ip_geo.read().await;
+            let geo_changed = match (&*cached, &geo_info) {
+                (Some(old), Some(new)) => old.country != new.country,
+                (None, Some(_)) => true,
+                _ => false,
+            };
+            drop(cached);
+
+            if geo_changed {
+                // Clear localhost binding when VPN changes
+                state.bindings.remove(&client_key);
+                tracing::info!("VPN change detected -> cleared binding, new IP {} (country: {:?}, region: {:?})",
+                    public_ip,
+                    geo_info.as_ref().map(|g| &g.country),
+                    geo_info.as_ref().map(|g| &g.region));
+            }
+
+            // Update cache
+            let mut cached = state.public_ip_geo.write().await;
+            *cached = geo_info.clone();
+            geo_info
+        } else {
+            state.public_ip_geo.read().await.clone()
+        };
+        new_geo
+    } else {
+        // Direct client - lookup geo
+        state.geo.as_ref()
+            .and_then(|g| g.lookup_ip(client_ip))
+            .map(|(country, region)| GeoInfo { country, region })
+    };
+
+    let client_country = client_geo.as_ref().map(|g| g.country.clone());
+    let client_region = client_geo.as_ref().map(|g| g.region.clone());
 
     // 1. Verifica binding existente
     let mut chosen_backend_id: Option<String> = None;
@@ -64,6 +103,7 @@ async fn handle_connection(
             &rt.backends,
             &state.local_region,
             client_region.as_deref(),
+            client_country.as_deref(),
             &state.metrics,
         );
         let backend = match backend_opt {
@@ -96,7 +136,14 @@ async fn handle_connection(
         }
     };
 
-    let backend_addr = format!("{}:{}", backend.wg_ip, backend.port);
+    // Support both IPv4 and IPv6 addresses
+    let backend_addr = if backend.wg_ip.contains(':') {
+        // IPv6 address - wrap in brackets
+        format!("[{}]:{}", backend.wg_ip, backend.port)
+    } else {
+        // IPv4 address
+        format!("{}:{}", backend.wg_ip, backend.port)
+    };
     tracing::debug!(
         "proxying {} -> {} ({})",
         client_ip,
@@ -106,7 +153,7 @@ async fn handle_connection(
 
     // Métricas: conexão + RTT
     let t0 = Instant::now();
-    let mut backend_stream = match TcpStream::connect(&backend_addr).await {
+    let backend_stream = match TcpStream::connect(&backend_addr).await {
         Ok(s) => s,
         Err(e) => {
             tracing::error!(

@@ -27,12 +27,13 @@ impl Default for BackendMetrics {
 /// Escolha de backend:
 /// - Filtra healthy
 /// - Respeita hard_limit
-/// - Considera região do cliente + região local
+/// - Prioriza: 1º país exato, 2º região, 3º fallback
 /// - Usa weight e soft_limit pra balancear carga
 pub fn pick_backend(
     backends: &[Backend],
     local_region: &str,
     client_region: Option<&str>,
+    client_country: Option<&str>,
     metrics: &DashMap<String, BackendMetrics>,
 ) -> Option<Backend> {
     let mut best: Option<(Backend, f64)> = None;
@@ -57,13 +58,15 @@ pub fn pick_backend(
             continue;
         }
 
-        // Região: prioridade
-        let region_score = if Some(b.region.as_str()) == client_region {
-            0.0 // melhor caso: mesma região do cliente
+        // Geo score: prioridade país > região > fallback
+        let geo_score = if client_country.is_some() && Some(b.country.as_str()) == client_country {
+            0.0 // melhor caso: mesmo país do cliente (FR→CDG)
+        } else if Some(b.region.as_str()) == client_region {
+            1.0 // mesma região do cliente (FR→qualquer EU)
         } else if b.region == local_region {
-            1.0 // mesma região do POP
+            2.0 // mesma região do POP
         } else {
-            2.0 // fallback
+            3.0 // fallback global
         };
 
         // Load factor (quanto da soft_limit está em uso)
@@ -73,7 +76,7 @@ pub fn pick_backend(
         let weight = if b.weight == 0 { 1.0 } else { b.weight as f64 };
 
         // Score final: menor melhor
-        let score = region_score * 100.0 + (load_factor / weight);
+        let score = geo_score * 100.0 + (load_factor / weight);
 
         match &best {
             Some((_, best_score)) => {

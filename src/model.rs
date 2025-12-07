@@ -8,7 +8,8 @@ use std::time::Instant;
 pub struct Backend {
     pub id: String,
     pub app: String,
-    pub region: String,    // "sa", "us", "eu"
+    pub region: String,    // "sa", "us", "eu", "ap"
+    pub country: String,   // "BR", "FR", "US", etc (ISO 3166-1 alpha-2)
     pub wg_ip: String,     // IP WireGuard
     pub port: u16,
     pub healthy: bool,
@@ -46,6 +47,7 @@ impl Hash for ClientKey {
 #[derive(Debug, Clone)]
 pub struct Binding {
     pub backend_id: String,
+    #[allow(dead_code)]
     pub created_at: Instant,
     pub last_seen: Instant,
 }

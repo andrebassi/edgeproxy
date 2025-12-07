@@ -9,6 +9,9 @@ use std::time::{Duration, Instant};
 use tokio::sync::RwLock;
 use tokio::time::sleep;
 
+/// Embedded GeoLite2-Country database (compiled into binary)
+const EMBEDDED_GEOIP: &[u8] = include_bytes!("../GeoLite2-Country.mmdb");
+
 /// GeoDB (MaxMind)
 #[derive(Clone)]
 pub struct GeoDb {
@@ -16,6 +19,14 @@ pub struct GeoDb {
 }
 
 impl GeoDb {
+    /// Load embedded GeoIP database from binary
+    pub fn embedded() -> anyhow::Result<Self> {
+        let reader = Reader::from_source(EMBEDDED_GEOIP.to_vec())?;
+        Ok(Self {
+            reader: Arc::new(reader),
+        })
+    }
+
     pub fn open(path: &str) -> anyhow::Result<Self> {
         let reader = Reader::open_readfile(path)?;
         Ok(Self {
@@ -23,8 +34,8 @@ impl GeoDb {
         })
     }
 
-    /// Mapeia IP -> região lógica ("sa", "us", "eu"...)
-    pub fn region_for_ip(&self, ip: IpAddr) -> Option<String> {
+    /// Mapeia IP -> (país, região) - ex: ("FR", "eu")
+    pub fn lookup_ip(&self, ip: IpAddr) -> Option<(String, String)> {
         #[derive(Debug, Deserialize)]
         struct Country {
             iso_code: Option<String>,
@@ -42,13 +53,23 @@ impl GeoDb {
             "BR" | "AR" | "CL" | "PE" | "CO" | "UY" | "PY" | "BO" | "EC" => "sa",
             // NA
             "US" | "CA" | "MX" => "us",
-            // EU (exemplo simplificado)
-            "PT" | "ES" | "FR" | "DE" | "NL" | "IT" | "GB" | "IE" | "BE" | "CH" => "eu",
+            // EU
+            "PT" | "ES" | "FR" | "DE" | "NL" | "IT" | "GB" | "IE" | "BE" | "CH" | "AT" | "PL" | "CZ" | "SE" | "NO" | "DK" | "FI" => "eu",
+            // AP
+            "JP" | "KR" | "TW" | "HK" | "SG" | "MY" | "TH" | "VN" | "ID" | "PH" | "AU" | "NZ" => "ap",
             _ => "us", // fallback
         };
 
-        Some(region.to_string())
+        Some((iso.to_string(), region.to_string()))
     }
+
+}
+
+/// Cached geo info (country, region)
+#[derive(Clone, Debug)]
+pub struct GeoInfo {
+    pub country: String,
+    pub region: String,
 }
 
 /// Estado compartilhado do edgeProxy
@@ -59,6 +80,7 @@ pub struct RcProxyState {
     pub local_region: String,
     pub geo: Option<GeoDb>,
     pub metrics: Arc<DashMap<String, BackendMetrics>>, // backend_id -> métricas
+    pub public_ip_geo: Arc<RwLock<Option<GeoInfo>>>,   // cached public IP geo (country, region)
 }
 
 impl RcProxyState {
@@ -69,7 +91,44 @@ impl RcProxyState {
             local_region,
             geo,
             metrics: Arc::new(DashMap::new()),
+            public_ip_geo: Arc::new(RwLock::new(None)),
         }
+    }
+}
+
+/// Fetch public IP from AWS checkip service
+pub async fn fetch_public_ip() -> Option<IpAddr> {
+    let client = match reqwest::Client::builder()
+        .timeout(Duration::from_secs(5))
+        .build()
+    {
+        Ok(c) => c,
+        Err(_) => return None,
+    };
+
+    let resp = match client
+        .get("https://checkip.amazonaws.com/")
+        .send()
+        .await
+    {
+        Ok(r) => r,
+        Err(e) => {
+            tracing::warn!("failed to fetch public IP: {}", e);
+            return None;
+        }
+    };
+
+    let text = match resp.text().await {
+        Ok(t) => t.trim().to_string(),
+        Err(_) => return None,
+    };
+
+    match text.parse::<IpAddr>() {
+        Ok(ip) => {
+            tracing::info!("public IP detected: {}", ip);
+            Some(ip)
+        }
+        Err(_) => None,
     }
 }
 

@@ -32,6 +32,7 @@ async fn main() -> anyhow::Result<()> {
         cfg.listen_addr
     );
 
+    // Load GeoIP: prefer external file if specified, otherwise use embedded
     let geo = match &cfg.geoip_path {
         Some(path) => match GeoDb::open(path) {
             Ok(db) => {
@@ -43,7 +44,16 @@ async fn main() -> anyhow::Result<()> {
                 None
             }
         },
-        None => None,
+        None => match GeoDb::embedded() {
+            Ok(db) => {
+                tracing::info!("GeoIP DB loaded (embedded)");
+                Some(db)
+            }
+            Err(e) => {
+                tracing::error!("failed to load embedded GeoIP DB: {:?}", e);
+                None
+            }
+        },
     };
 
     let state = RcProxyState::new(cfg.region.clone(), geo);
