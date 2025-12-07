@@ -2,7 +2,7 @@
 sidebar_position: 2
 ---
 
-# Client Affinity
+# Affinity
 
 Client affinity (sticky sessions) ensures that repeated connections from the same client IP are routed to the same backend. This is critical for stateful protocols and session-based applications.
 

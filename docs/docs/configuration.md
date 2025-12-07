@@ -29,12 +29,6 @@ edgeProxy is configured entirely through environment variables. This document co
 | `EDGEPROXY_BINDING_TTL_SECS` | `600` | Client binding TTL (10 minutes) |
 | `EDGEPROXY_BINDING_GC_INTERVAL_SECS` | `60` | Garbage collection interval |
 
-### GeoIP
-
-| Variable | Default | Description |
-|----------|---------|-------------|
-| `EDGEPROXY_GEOIP_PATH` | *(none)* | Path to GeoLite2-Country.mmdb |
-
 ### Debugging
 
 | Variable | Default | Description |
@@ -62,7 +56,6 @@ export EDGEPROXY_LISTEN_ADDR="0.0.0.0:8080"
 export EDGEPROXY_REGION="sa"
 export EDGEPROXY_DB_PATH="/data/routing.db"
 export EDGEPROXY_DB_RELOAD_SECS="5"
-export EDGEPROXY_GEOIP_PATH="/data/GeoLite2-Country.mmdb"
 export EDGEPROXY_BINDING_TTL_SECS="600"
 export EDGEPROXY_BINDING_GC_INTERVAL_SECS="60"
 
@@ -148,30 +141,9 @@ soft_limit ≤ connections < hard_limit → Higher score (less preferred)
 connections ≥ hard_limit → Backend excluded
 ```
 
-## GeoIP Setup
+## GeoIP
 
-edgeProxy uses MaxMind GeoLite2 for IP geolocation.
-
-### 1. Register for Free Account
-
-Visit [MaxMind GeoLite2](https://dev.maxmind.com/geoip/geolite2-free-geolocation-data) and create a free account.
-
-### 2. Download Database
-
-```bash
-# Download GeoLite2-Country database
-wget "https://download.maxmind.com/app/geoip_download?edition_id=GeoLite2-Country&suffix=tar.gz&license_key=YOUR_KEY" -O GeoLite2-Country.tar.gz
-
-# Extract
-tar -xzf GeoLite2-Country.tar.gz
-mv GeoLite2-Country_*/GeoLite2-Country.mmdb /data/
-```
-
-### 3. Configure edgeProxy
-
-```bash
-export EDGEPROXY_GEOIP_PATH="/data/GeoLite2-Country.mmdb"
-```
+The MaxMind GeoLite2 database is **embedded in the binary** - no external download or configuration required.
 
 ### Country to Region Mapping
 

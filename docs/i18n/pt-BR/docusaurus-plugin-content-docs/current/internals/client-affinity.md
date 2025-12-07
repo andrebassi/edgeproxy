@@ -2,7 +2,7 @@
 sidebar_position: 2
 ---
 
-# Afinidade de Cliente
+# Afinidade
 
 A afinidade de cliente (sticky sessions) garante que conexões repetidas do mesmo IP de cliente sejam roteadas para o mesmo backend. Isso é crítico para protocolos stateful e aplicações baseadas em sessão.
 

@@ -17,7 +17,10 @@ Este guia cobre instalação, build a partir do código fonte e execução do ed
 ### Opcionais
 
 - **Docker & Docker Compose** - Para deployment containerizado
-- **MaxMind GeoLite2** - Para geo-roteamento (registro gratuito necessário)
+
+:::info GeoIP Incluído
+O banco de dados MaxMind GeoLite2 está **embeddado no binário** - nenhum download externo necessário.
+:::
 
 ## Instalação
 
