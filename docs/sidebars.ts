@@ -4,32 +4,29 @@ const sidebars: SidebarsConfig = {
   tutorialSidebar: [
     'intro',
     'getting-started',
-    'architecture',
-    'configuration',
     {
       type: 'category',
-      label: 'Deployment',
+      label: 'Installation',
+      collapsed: false,
       items: [
         'deployment/docker',
         'deployment/kubernetes',
+        'deployment/aws',
       ],
     },
+    'configuration',
+    'architecture',
     {
       type: 'category',
       label: 'Internals',
+      collapsed: true,
       items: [
         'internals/load-balancer',
         'internals/client-affinity',
         'internals/node-management',
-        {
-          type: 'category',
-          label: 'Tests',
-          items: [
-            'benchmark',
-          ],
-        },
       ],
     },
+    'benchmark',
   ],
 };
 
