@@ -1,14 +1,10 @@
 {
-  "sidebar.tutorialSidebar.category.Deployment": {
-    "message": "Implantação",
-    "description": "The label for category Deployment in sidebar tutorialSidebar"
+  "sidebar.tutorialSidebar.category.Installation": {
+    "message": "Instalacao",
+    "description": "The label for category Installation in sidebar tutorialSidebar"
   },
   "sidebar.tutorialSidebar.category.Internals": {
     "message": "Internos",
     "description": "The label for category Internals in sidebar tutorialSidebar"
-  },
-  "sidebar.tutorialSidebar.category.Tests": {
-    "message": "Testes",
-    "description": "The label for category Tests in sidebar tutorialSidebar"
   }
 }
