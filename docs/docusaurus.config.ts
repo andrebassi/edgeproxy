@@ -40,6 +40,7 @@ const config: Config = {
       'classic',
       {
         docs: {
+          path: 'markdown',
           sidebarPath: './sidebars.ts',
           editUrl: 'https://github.com/edge-cloud/edgeproxy/tree/main/docs/',
         },

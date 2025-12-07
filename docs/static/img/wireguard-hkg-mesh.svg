@@ -1,0 +1,75 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 600 400">
+  <defs>
+    <linearGradient id="popGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" style="stop-color:#818cf8"/>
+      <stop offset="100%" style="stop-color:#6366f1"/>
+    </linearGradient>
+    <linearGradient id="hubGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" style="stop-color:#f59e0b"/>
+      <stop offset="100%" style="stop-color:#d97706"/>
+    </linearGradient>
+    <linearGradient id="apacGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" style="stop-color:#34d399"/>
+      <stop offset="100%" style="stop-color:#10b981"/>
+    </linearGradient>
+  </defs>
+
+  <!-- Background -->
+  <rect width="600" height="400" fill="#0f172a"/>
+
+  <!-- Title -->
+  <text x="300" y="30" text-anchor="middle" fill="#f8fafc" font-family="system-ui" font-size="16" font-weight="bold">HKG POP Full Mesh (Current)</text>
+  <text x="300" y="50" text-anchor="middle" fill="#22c55e" font-family="system-ui" font-size="12">Direct connections to APAC backends</text>
+
+  <!-- EC2 Ireland Hub -->
+  <rect x="230" y="80" width="140" height="60" rx="8" fill="url(#hubGrad)"/>
+  <text x="300" y="105" text-anchor="middle" fill="white" font-family="system-ui" font-size="12" font-weight="bold">EC2 Ireland</text>
+  <text x="300" y="125" text-anchor="middle" fill="#fef3c7" font-family="monospace" font-size="10">10.50.0.1</text>
+
+  <!-- Non-APAC traffic label -->
+  <text x="300" y="160" text-anchor="middle" fill="#94a3b8" font-family="system-ui" font-size="10">(non-APAC traffic)</text>
+
+  <!-- GCP HKG POP -->
+  <rect x="230" y="180" width="140" height="60" rx="8" fill="url(#popGrad)"/>
+  <text x="300" y="205" text-anchor="middle" fill="white" font-family="system-ui" font-size="12" font-weight="bold">GCP HKG POP</text>
+  <text x="300" y="225" text-anchor="middle" fill="#e0e7ff" font-family="monospace" font-size="10">10.50.5.1</text>
+
+  <!-- Connection Hub to HKG -->
+  <line x1="300" y1="140" x2="300" y2="180" stroke="#f59e0b" stroke-width="2"/>
+
+  <!-- APAC Backends -->
+  <!-- NRT -->
+  <rect x="100" y="300" width="100" height="60" rx="6" fill="url(#apacGrad)"/>
+  <text x="150" y="325" text-anchor="middle" fill="white" font-family="system-ui" font-size="12" font-weight="bold">NRT</text>
+  <text x="150" y="345" text-anchor="middle" fill="#d1fae5" font-family="monospace" font-size="10">10.50.4.1</text>
+
+  <!-- SIN -->
+  <rect x="250" y="300" width="100" height="60" rx="6" fill="url(#apacGrad)"/>
+  <text x="300" y="325" text-anchor="middle" fill="white" font-family="system-ui" font-size="12" font-weight="bold">SIN</text>
+  <text x="300" y="345" text-anchor="middle" fill="#d1fae5" font-family="monospace" font-size="10">10.50.4.2</text>
+
+  <!-- SYD -->
+  <rect x="400" y="300" width="100" height="60" rx="6" fill="url(#apacGrad)"/>
+  <text x="450" y="325" text-anchor="middle" fill="white" font-family="system-ui" font-size="12" font-weight="bold">SYD</text>
+  <text x="450" y="345" text-anchor="middle" fill="#d1fae5" font-family="monospace" font-size="10">10.50.4.3</text>
+
+  <!-- Direct mesh connections -->
+  <line x1="270" y1="240" x2="150" y2="300" stroke="#22c55e" stroke-width="3"/>
+  <line x1="300" y1="240" x2="300" y2="300" stroke="#22c55e" stroke-width="3"/>
+  <line x1="330" y1="240" x2="450" y2="300" stroke="#22c55e" stroke-width="3"/>
+
+  <!-- Direct labels -->
+  <text x="150" y="375" text-anchor="middle" fill="#22c55e" font-family="monospace" font-size="11" font-weight="bold">49ms</text>
+  <text x="300" y="375" text-anchor="middle" fill="#22c55e" font-family="monospace" font-size="11" font-weight="bold">38ms</text>
+  <text x="450" y="375" text-anchor="middle" fill="#22c55e" font-family="monospace" font-size="11" font-weight="bold">122ms</text>
+
+  <!-- (direct) labels -->
+  <text x="200" y="265" text-anchor="middle" fill="#6ee7b7" font-family="system-ui" font-size="9">(direct)</text>
+  <text x="300" y="265" text-anchor="middle" fill="#6ee7b7" font-family="system-ui" font-size="9">(direct)</text>
+  <text x="400" y="265" text-anchor="middle" fill="#6ee7b7" font-family="system-ui" font-size="9">(direct)</text>
+
+  <!-- Improvement callout -->
+  <rect x="480" y="180" width="100" height="50" rx="6" fill="#14532d"/>
+  <text x="530" y="200" text-anchor="middle" fill="#22c55e" font-family="system-ui" font-size="10" font-weight="bold">~10x faster</text>
+  <text x="530" y="218" text-anchor="middle" fill="#6ee7b7" font-family="system-ui" font-size="9">than hub</text>
+</svg>

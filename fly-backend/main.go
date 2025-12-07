@@ -33,6 +33,7 @@ var regionNames = map[string]struct {
 
 var (
 	region         string
+	hostname       string
 	requestCount   uint64
 	bytesServed    uint64
 	startTime      time.Time
@@ -42,6 +43,16 @@ func main() {
 	region = os.Getenv("FLY_REGION")
 	if region == "" {
 		region = "local"
+	}
+
+	// Get hostname - use FLY_ALLOC_ID or machine hostname
+	hostname = os.Getenv("FLY_ALLOC_ID")
+	if hostname == "" {
+		hostname, _ = os.Hostname()
+	}
+	// Truncate to first 8 chars for display
+	if len(hostname) > 8 {
+		hostname = hostname[:8]
 	}
 
 	port := os.Getenv("PORT")
@@ -109,6 +120,7 @@ func handleInfo(w http.ResponseWriter, r *http.Request) {
 	info := map[string]interface{}{
 		"region":       region,
 		"region_name":  names.EN,
+		"hostname":     hostname,
 		"uptime_secs":  int(time.Since(startTime).Seconds()),
 		"requests":     atomic.LoadUint64(&requestCount),
 		"bytes_served": atomic.LoadUint64(&bytesServed),
@@ -268,6 +280,7 @@ func buildResponse(region, lang string) string {
 
   %s
   Region: %s
+  Host: %s
   Requests: %d
 
 %s
@@ -278,7 +291,7 @@ func buildResponse(region, lang string) string {
 Try: /benchmark for speed test
 `
 
-	return fmt.Sprintf(box, title, location, strings.ToUpper(region), reqs, powered, footer, timestamp)
+	return fmt.Sprintf(box, title, location, strings.ToUpper(region), hostname, reqs, powered, footer, timestamp)
 }
 
 const benchmarkHTML = `<!DOCTYPE html>
