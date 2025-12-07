@@ -123,42 +123,47 @@ task aws:ec2:create
 
 ---
 
-## Script User Data
+## Compilação e Deploy do edgeProxy
 
-A instância EC2 instala todas as dependências automaticamente via user data:
+### Cross-Compile para Linux (a partir de macOS/Linux)
+
+Compile o binário localmente usando Docker para deploy mais rápido:
 
 ```bash
-#!/bin/bash
-set -ex
+# Build para Linux amd64 usando Docker
+docker run --rm --platform linux/amd64 \
+  -v "$(pwd)":/app -w /app \
+  rust:latest \
+  bash -c "apt-get update && apt-get install -y pkg-config libssl-dev && cargo build --release"
 
-# Atualizar sistema
-apt-get update && apt-get upgrade -y
+# O binário estará em target/release/edge-proxy (~16MB)
+ls -la target/release/edge-proxy
+```
 
-# Instalar WireGuard
-apt-get install -y wireguard wireguard-tools
+### Deploy para EC2
 
-# Instalar ferramentas de build
-apt-get install -y curl wget git build-essential pkg-config libssl-dev
+```bash
+# Obter IP público do EC2
+EC2_IP=54.171.48.207
 
-# Habilitar IP forwarding
-echo "net.ipv4.ip_forward=1" >> /etc/sysctl.conf
-echo "net.ipv6.conf.all.forwarding=1" >> /etc/sysctl.conf
-sysctl -p
+# Copiar binário e banco de dados de roteamento para EC2
+scp -i ~/.ssh/edgeproxy-key.pem target/release/edge-proxy ubuntu@$EC2_IP:/tmp/
+scp -i ~/.ssh/edgeproxy-key.pem routing.db ubuntu@$EC2_IP:/tmp/
 
-# Criar diretório edgeProxy
-mkdir -p /opt/edgeproxy
+# SSH e configuração no EC2
+ssh -i ~/.ssh/edgeproxy-key.pem ubuntu@$EC2_IP "
+  sudo mkdir -p /opt/edgeproxy
+  sudo mv /tmp/edge-proxy /opt/edgeproxy/
+  sudo mv /tmp/routing.db /opt/edgeproxy/
+  sudo chmod +x /opt/edgeproxy/edge-proxy
+"
+```
 
-# Instalar Rust
-curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y
-source $HOME/.cargo/env
+### Criar Serviço systemd
 
-# Clonar e compilar edgeProxy
-cd /opt/edgeproxy
-git clone https://github.com/edge-cloud/edgeproxy.git .
-cargo build --release
-
-# Criar serviço systemd
-cat > /etc/systemd/system/edgeproxy.service << 'EOF'
+```bash
+ssh -i ~/.ssh/edgeproxy-key.pem ubuntu@$EC2_IP "
+cat | sudo tee /etc/systemd/system/edgeproxy.service << 'EOF'
 [Unit]
 Description=edgeProxy TCP Proxy
 After=network.target wireguard.service
@@ -170,7 +175,7 @@ WorkingDirectory=/opt/edgeproxy
 Environment=EDGEPROXY_REGION=eu
 Environment=EDGEPROXY_LISTEN_ADDR=0.0.0.0:8080
 Environment=EDGEPROXY_DB_PATH=/opt/edgeproxy/routing.db
-ExecStart=/opt/edgeproxy/target/release/edge-proxy
+ExecStart=/opt/edgeproxy/edge-proxy
 Restart=always
 RestartSec=5
 
@@ -178,8 +183,24 @@ RestartSec=5
 WantedBy=multi-user.target
 EOF
 
-systemctl daemon-reload
-systemctl enable edgeproxy
+sudo systemctl daemon-reload
+sudo systemctl enable edgeproxy
+sudo systemctl start edgeproxy
+sudo systemctl status edgeproxy
+"
+```
+
+### Verificar Deploy
+
+```bash
+# Verificar status do serviço
+ssh -i ~/.ssh/edgeproxy-key.pem ubuntu@$EC2_IP "sudo systemctl status edgeproxy"
+
+# Verificar logs
+ssh -i ~/.ssh/edgeproxy-key.pem ubuntu@$EC2_IP "sudo journalctl -u edgeproxy -n 20"
+
+# Testar conectividade (da máquina local)
+nc -zv $EC2_IP 8080
 ```
 
 ---
