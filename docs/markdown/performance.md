@@ -22,7 +22,7 @@ When a client connects to edgeProxy, the request flows through several optimized
 | GeoIP Lookup | ~100ns | In-memory MaxMind database query |
 | Backend Selection | ~10μs | DashMap lookup + scoring algorithm |
 | WireGuard Tunnel | ~0.5ms | Encryption overhead (ChaCha20-Poly1305) |
-| **Total Proxy Overhead** | **<1ms** | End-to-end proxy latency |
+| **Total Proxy Overhead** | **\<1ms** | End-to-end proxy latency |
 
 ## Tokio Async Runtime
 
@@ -189,7 +189,7 @@ Based on benchmarks with a 4-core VM:
 |--------|-------|
 | Connections/second | 50,000+ |
 | Concurrent connections | 10,000+ |
-| Proxy latency | <1ms |
+| Proxy latency | \<1ms |
 | Memory per 1K connections | ~10MB |
 | WireGuard CPU overhead | ~3% |
 | Cold start time | ~50ms |
