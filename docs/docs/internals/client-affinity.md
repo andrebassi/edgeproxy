@@ -135,47 +135,7 @@ if backend.is_none() {
 
 ## Flow Diagram
 
-```
-┌────────┐                              ┌──────────┐
-│ Client │                              │edgeProxy │
-└────┬───┘                              └────┬─────┘
-     │                                       │
-     │ Connection 1                          │
-     │──────────────────────────────────────>│
-     │                                       │ Binding exists?
-     │                                       │────────────────>│ No
-     │                                       │                 │
-     │                                       │ Pick backend    │
-     │                                       │<────────────────│
-     │                                       │                 │
-     │                                       │ Create binding  │
-     │                                       │────────────────>│
-     │                                       │                 │
-     │ Connection 2 (same IP)                │                 │
-     │──────────────────────────────────────>│                 │
-     │                                       │ Binding exists? │
-     │                                       │────────────────>│ Yes
-     │                                       │                 │
-     │                                       │ Update last_seen│
-     │                                       │────────────────>│
-     │                                       │                 │
-     │                                       │ Use bound backend
-     │                                       │<────────────────│
-     │                                       │
-     │ No connection for 10 min              │
-     │                                       │ GC runs
-     │                                       │────────────────>│
-     │                                       │                 │
-     │                                       │ Binding expired │
-     │                                       │ (removed)       │
-     │                                       │                 │
-     │ Connection 3 (new session)            │                 │
-     │──────────────────────────────────────>│                 │
-     │                                       │ Binding exists? │
-     │                                       │────────────────>│ No
-     │                                       │                 │
-     │                                       │ New backend...  │
-```
+![Client Affinity Flow](/img/client-affinity-flow.svg)
 
 ## Use Cases
 

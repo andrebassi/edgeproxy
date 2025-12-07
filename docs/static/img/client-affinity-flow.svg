@@ -1,0 +1,128 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 900 650">
+  <defs>
+    <linearGradient id="clientGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" style="stop-color:#8B5CF6;stop-opacity:1" />
+      <stop offset="100%" style="stop-color:#7C3AED;stop-opacity:1" />
+    </linearGradient>
+    <linearGradient id="proxyGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" style="stop-color:#3B82F6;stop-opacity:1" />
+      <stop offset="100%" style="stop-color:#2563EB;stop-opacity:1" />
+    </linearGradient>
+    <linearGradient id="bindingGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" style="stop-color:#10B981;stop-opacity:1" />
+      <stop offset="100%" style="stop-color:#059669;stop-opacity:1" />
+    </linearGradient>
+    <filter id="shadow" x="-20%" y="-20%" width="140%" height="140%">
+      <feDropShadow dx="0" dy="4" stdDeviation="6" flood-opacity="0.15"/>
+    </filter>
+    <marker id="arrowhead" markerWidth="10" markerHeight="7" refX="9" refY="3.5" orient="auto">
+      <polygon points="0 0, 10 3.5, 0 7" fill="#94A3B8"/>
+    </marker>
+    <marker id="arrowGreen" markerWidth="10" markerHeight="7" refX="9" refY="3.5" orient="auto">
+      <polygon points="0 0, 10 3.5, 0 7" fill="#10B981"/>
+    </marker>
+    <marker id="arrowRed" markerWidth="10" markerHeight="7" refX="9" refY="3.5" orient="auto">
+      <polygon points="0 0, 10 3.5, 0 7" fill="#EF4444"/>
+    </marker>
+  </defs>
+
+  <!-- Background -->
+  <rect width="900" height="650" fill="#0f172a" rx="12"/>
+
+  <!-- Title -->
+  <text x="450" y="35" text-anchor="middle" fill="white" font-family="system-ui" font-size="20" font-weight="600">Client Affinity - Sequence Flow</text>
+
+  <!-- Actors -->
+  <!-- Client -->
+  <g filter="url(#shadow)">
+    <rect x="80" y="55" width="100" height="40" rx="8" fill="url(#clientGrad)"/>
+    <text x="130" y="80" text-anchor="middle" fill="white" font-family="system-ui" font-size="13" font-weight="600">Client</text>
+  </g>
+  <line x1="130" y1="95" x2="130" y2="620" stroke="#8B5CF6" stroke-width="2" stroke-dasharray="5,5"/>
+
+  <!-- edgeProxy -->
+  <g filter="url(#shadow)">
+    <rect x="380" y="55" width="120" height="40" rx="8" fill="url(#proxyGrad)"/>
+    <text x="440" y="80" text-anchor="middle" fill="white" font-family="system-ui" font-size="13" font-weight="600">edgeProxy</text>
+  </g>
+  <line x1="440" y1="95" x2="440" y2="620" stroke="#3B82F6" stroke-width="2" stroke-dasharray="5,5"/>
+
+  <!-- Binding Table -->
+  <g filter="url(#shadow)">
+    <rect x="680" y="55" width="130" height="40" rx="8" fill="url(#bindingGrad)"/>
+    <text x="745" y="80" text-anchor="middle" fill="white" font-family="system-ui" font-size="13" font-weight="600">Binding Table</text>
+  </g>
+  <line x1="745" y1="95" x2="745" y2="620" stroke="#10B981" stroke-width="2" stroke-dasharray="5,5"/>
+
+  <!-- Section 1: Connection 1 (New) -->
+  <rect x="20" y="115" width="860" height="130" rx="6" fill="#1E293B" fill-opacity="0.5"/>
+  <text x="35" y="135" fill="#F97316" font-family="system-ui" font-size="12" font-weight="600">1. First Connection</text>
+
+  <!-- Connection 1 arrow -->
+  <line x1="140" y1="155" x2="425" y2="155" stroke="#94A3B8" stroke-width="2" marker-end="url(#arrowhead)"/>
+  <text x="280" y="148" text-anchor="middle" fill="#94A3B8" font-family="system-ui" font-size="11">Connection 1</text>
+
+  <!-- Check binding -->
+  <line x1="455" y1="175" x2="730" y2="175" stroke="#94A3B8" stroke-width="2" marker-end="url(#arrowhead)"/>
+  <text x="590" y="168" text-anchor="middle" fill="#94A3B8" font-family="system-ui" font-size="11">Binding exists?</text>
+
+  <!-- No binding -->
+  <line x1="730" y1="195" x2="455" y2="195" stroke="#EF4444" stroke-width="2" marker-end="url(#arrowRed)" stroke-dasharray="4,2"/>
+  <text x="590" y="188" text-anchor="middle" fill="#EF4444" font-family="system-ui" font-size="11">No - use LB</text>
+
+  <!-- Create binding -->
+  <line x1="455" y1="215" x2="730" y2="215" stroke="#10B981" stroke-width="2" marker-end="url(#arrowGreen)"/>
+  <text x="590" y="232" text-anchor="middle" fill="#10B981" font-family="system-ui" font-size="11">Create binding (TTL=600s)</text>
+
+  <!-- Section 2: Connection 2 (Same IP) -->
+  <rect x="20" y="255" width="860" height="130" rx="6" fill="#1E293B" fill-opacity="0.5"/>
+  <text x="35" y="275" fill="#10B981" font-family="system-ui" font-size="12" font-weight="600">2. Reconnection (Same IP)</text>
+
+  <!-- Connection 2 arrow -->
+  <line x1="140" y1="295" x2="425" y2="295" stroke="#94A3B8" stroke-width="2" marker-end="url(#arrowhead)"/>
+  <text x="280" y="288" text-anchor="middle" fill="#94A3B8" font-family="system-ui" font-size="11">Connection 2</text>
+
+  <!-- Check binding -->
+  <line x1="455" y1="315" x2="730" y2="315" stroke="#94A3B8" stroke-width="2" marker-end="url(#arrowhead)"/>
+  <text x="590" y="308" text-anchor="middle" fill="#94A3B8" font-family="system-ui" font-size="11">Binding exists?</text>
+
+  <!-- Yes binding -->
+  <line x1="730" y1="335" x2="455" y2="335" stroke="#10B981" stroke-width="2" marker-end="url(#arrowGreen)"/>
+  <text x="590" y="328" text-anchor="middle" fill="#10B981" font-family="system-ui" font-size="11">Yes - found!</text>
+
+  <!-- Update last_seen -->
+  <line x1="455" y1="355" x2="730" y2="355" stroke="#10B981" stroke-width="2" marker-end="url(#arrowGreen)"/>
+  <text x="590" y="372" text-anchor="middle" fill="#10B981" font-family="system-ui" font-size="11">Update last_seen</text>
+
+  <!-- Section 3: TTL Expired -->
+  <rect x="20" y="395" width="860" height="90" rx="6" fill="#1E293B" fill-opacity="0.5"/>
+  <text x="35" y="415" fill="#EF4444" font-family="system-ui" font-size="12" font-weight="600">3. No Activity for 10 min</text>
+
+  <!-- GC runs -->
+  <rect x="420" y="430" width="310" height="35" rx="4" fill="#0F172A" stroke="#EF4444" stroke-width="1"/>
+  <text x="575" y="452" text-anchor="middle" fill="#EF4444" font-family="system-ui" font-size="11">GC runs - Binding expired (removed)</text>
+
+  <!-- Section 4: Connection 3 (New Session) -->
+  <rect x="20" y="495" width="860" height="115" rx="6" fill="#1E293B" fill-opacity="0.5"/>
+  <text x="35" y="515" fill="#F97316" font-family="system-ui" font-size="12" font-weight="600">4. New Connection After Expiry</text>
+
+  <!-- Connection 3 arrow -->
+  <line x1="140" y1="540" x2="425" y2="540" stroke="#94A3B8" stroke-width="2" marker-end="url(#arrowhead)"/>
+  <text x="280" y="533" text-anchor="middle" fill="#94A3B8" font-family="system-ui" font-size="11">Connection 3</text>
+
+  <!-- Check binding -->
+  <line x1="455" y1="560" x2="730" y2="560" stroke="#94A3B8" stroke-width="2" marker-end="url(#arrowhead)"/>
+  <text x="590" y="553" text-anchor="middle" fill="#94A3B8" font-family="system-ui" font-size="11">Binding exists?</text>
+
+  <!-- No binding -->
+  <line x1="730" y1="580" x2="455" y2="580" stroke="#EF4444" stroke-width="2" marker-end="url(#arrowRed)" stroke-dasharray="4,2"/>
+  <text x="590" y="597" text-anchor="middle" fill="#EF4444" font-family="system-ui" font-size="11">No - new backend via LB</text>
+
+  <!-- Legend -->
+  <g transform="translate(700, 620)">
+    <line x1="0" y1="0" x2="30" y2="0" stroke="#10B981" stroke-width="2"/>
+    <text x="35" y="4" fill="#94A3B8" font-family="system-ui" font-size="10">Bound</text>
+    <line x1="80" y1="0" x2="110" y2="0" stroke="#EF4444" stroke-width="2" stroke-dasharray="4,2"/>
+    <text x="115" y="4" fill="#94A3B8" font-family="system-ui" font-size="10">Not bound</text>
+  </g>
+</svg>
