@@ -1,0 +1,124 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 900 400">
+  <defs>
+    <linearGradient id="clientGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" style="stop-color:#8B5CF6;stop-opacity:1" />
+      <stop offset="100%" style="stop-color:#7C3AED;stop-opacity:1" />
+    </linearGradient>
+    <linearGradient id="popGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" style="stop-color:#3B82F6;stop-opacity:1" />
+      <stop offset="100%" style="stop-color:#1D4ED8;stop-opacity:1" />
+    </linearGradient>
+    <linearGradient id="backendGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" style="stop-color:#10B981;stop-opacity:1" />
+      <stop offset="100%" style="stop-color:#059669;stop-opacity:1" />
+    </linearGradient>
+    <linearGradient id="dbGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" style="stop-color:#F97316;stop-opacity:1" />
+      <stop offset="100%" style="stop-color:#EA580C;stop-opacity:1" />
+    </linearGradient>
+    <filter id="shadow" x="-20%" y="-20%" width="140%" height="140%">
+      <feDropShadow dx="0" dy="4" stdDeviation="8" flood-opacity="0.15"/>
+    </filter>
+  </defs>
+
+  <!-- Background -->
+  <rect width="900" height="400" fill="#0f172a" rx="12"/>
+
+  <!-- Title -->
+  <text x="450" y="35" text-anchor="middle" fill="white" font-family="system-ui" font-size="20" font-weight="600">edgeProxy Architecture Overview</text>
+
+  <!-- Client -->
+  <g filter="url(#shadow)">
+    <rect x="40" y="150" width="120" height="100" rx="12" fill="url(#clientGrad)"/>
+    <text x="100" y="190" text-anchor="middle" fill="white" font-family="system-ui" font-size="14" font-weight="600">Client</text>
+    <text x="100" y="210" text-anchor="middle" fill="rgba(255,255,255,0.7)" font-family="system-ui" font-size="12">Brazil</text>
+    <text x="100" y="230" text-anchor="middle" fill="rgba(255,255,255,0.7)" font-family="system-ui" font-size="11">189.x.x.x</text>
+  </g>
+
+  <!-- Arrow Client -> POP -->
+  <g>
+    <line x1="170" y1="200" x2="240" y2="200" stroke="#64748B" stroke-width="3" stroke-linecap="round"/>
+    <polygon points="250,200 235,192 235,208" fill="#64748B"/>
+    <text x="205" y="185" text-anchor="middle" fill="#94A3B8" font-family="system-ui" font-size="10">TCP</text>
+  </g>
+
+  <!-- POP SA Box -->
+  <g filter="url(#shadow)">
+    <rect x="260" y="80" width="200" height="240" rx="12" fill="#1E293B" stroke="#334155" stroke-width="2"/>
+    <text x="360" y="110" text-anchor="middle" fill="#94A3B8" font-family="system-ui" font-size="14" font-weight="500">POP SA (Sao Paulo)</text>
+
+    <!-- edgeProxy inside -->
+    <rect x="280" y="125" width="160" height="90" rx="8" fill="url(#popGrad)"/>
+    <text x="360" y="155" text-anchor="middle" fill="white" font-family="system-ui" font-size="14" font-weight="600">edgeProxy</text>
+    <text x="360" y="175" text-anchor="middle" fill="rgba(255,255,255,0.7)" font-family="system-ui" font-size="11">Rust + Tokio</text>
+    <line x1="295" y1="188" x2="425" y2="188" stroke="rgba(255,255,255,0.2)" stroke-width="1"/>
+    <text x="360" y="205" text-anchor="middle" fill="rgba(255,255,255,0.9)" font-family="system-ui" font-size="10">0.0.0.0:8080</text>
+
+    <!-- routing.db inside -->
+    <rect x="280" y="230" width="160" height="50" rx="8" fill="url(#dbGrad)"/>
+    <text x="360" y="255" text-anchor="middle" fill="white" font-family="system-ui" font-size="12" font-weight="600">routing.db</text>
+    <text x="360" y="272" text-anchor="middle" fill="rgba(255,255,255,0.7)" font-family="system-ui" font-size="10">SQLite + Corrosion</text>
+
+    <!-- Sync arrow -->
+    <text x="360" y="305" text-anchor="middle" fill="#64748B" font-family="system-ui" font-size="10">hot-reload 5s</text>
+  </g>
+
+  <!-- WireGuard Mesh Label -->
+  <rect x="480" y="170" width="120" height="60" rx="8" fill="#1E293B" stroke="#475569" stroke-width="1" stroke-dasharray="5,3"/>
+  <text x="540" y="195" text-anchor="middle" fill="#94A3B8" font-family="system-ui" font-size="11">WireGuard</text>
+  <text x="540" y="212" text-anchor="middle" fill="#94A3B8" font-family="system-ui" font-size="11">10.50.x.x</text>
+
+  <!-- Arrows POP -> Backends -->
+  <g>
+    <line x1="470" y1="170" x2="610" y2="100" stroke="#64748B" stroke-width="2" stroke-linecap="round"/>
+    <polygon points="620,95 605,93 608,108" fill="#64748B"/>
+  </g>
+  <g>
+    <line x1="470" y1="200" x2="610" y2="200" stroke="#64748B" stroke-width="2" stroke-linecap="round"/>
+    <polygon points="620,200 605,192 605,208" fill="#64748B"/>
+  </g>
+  <g>
+    <line x1="470" y1="230" x2="610" y2="300" stroke="#64748B" stroke-width="2" stroke-linecap="round"/>
+    <polygon points="620,305 605,293 608,308" fill="#64748B"/>
+  </g>
+
+  <!-- Backend SA -->
+  <g filter="url(#shadow)">
+    <rect x="630" y="60" width="140" height="70" rx="8" fill="url(#backendGrad)"/>
+    <text x="700" y="90" text-anchor="middle" fill="white" font-family="system-ui" font-size="13" font-weight="600">sa-node-1</text>
+    <text x="700" y="108" text-anchor="middle" fill="rgba(255,255,255,0.8)" font-family="system-ui" font-size="10">10.50.1.1:9000</text>
+    <text x="700" y="122" text-anchor="middle" fill="rgba(255,255,255,0.6)" font-family="system-ui" font-size="10">region: sa</text>
+  </g>
+
+  <!-- Backend US -->
+  <g filter="url(#shadow)">
+    <rect x="630" y="165" width="140" height="70" rx="8" fill="url(#backendGrad)"/>
+    <text x="700" y="195" text-anchor="middle" fill="white" font-family="system-ui" font-size="13" font-weight="600">us-node-1</text>
+    <text x="700" y="213" text-anchor="middle" fill="rgba(255,255,255,0.8)" font-family="system-ui" font-size="10">10.50.2.1:9000</text>
+    <text x="700" y="227" text-anchor="middle" fill="rgba(255,255,255,0.6)" font-family="system-ui" font-size="10">region: us</text>
+  </g>
+
+  <!-- Backend EU -->
+  <g filter="url(#shadow)">
+    <rect x="630" y="270" width="140" height="70" rx="8" fill="url(#backendGrad)"/>
+    <text x="700" y="300" text-anchor="middle" fill="white" font-family="system-ui" font-size="13" font-weight="600">eu-node-1</text>
+    <text x="700" y="318" text-anchor="middle" fill="rgba(255,255,255,0.8)" font-family="system-ui" font-size="10">10.50.3.1:9000</text>
+    <text x="700" y="332" text-anchor="middle" fill="rgba(255,255,255,0.6)" font-family="system-ui" font-size="10">region: eu</text>
+  </g>
+
+  <!-- Healthy indicators -->
+  <circle cx="760" cy="95" r="6" fill="#22C55E"/>
+  <circle cx="760" cy="200" r="6" fill="#22C55E"/>
+  <circle cx="760" cy="305" r="6" fill="#22C55E"/>
+
+  <!-- Legend -->
+  <g>
+    <rect x="790" y="80" width="10" height="10" rx="2" fill="#22C55E"/>
+    <text x="805" y="89" fill="#94A3B8" font-family="system-ui" font-size="10">healthy</text>
+  </g>
+
+  <!-- Bottom labels -->
+  <text x="100" y="380" text-anchor="middle" fill="#64748B" font-family="system-ui" font-size="11">GeoIP Resolved</text>
+  <text x="360" y="380" text-anchor="middle" fill="#64748B" font-family="system-ui" font-size="11">Edge POP</text>
+  <text x="700" y="380" text-anchor="middle" fill="#64748B" font-family="system-ui" font-size="11">Backend Servers</text>
+</svg>
