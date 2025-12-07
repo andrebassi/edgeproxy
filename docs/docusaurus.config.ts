@@ -14,7 +14,7 @@ const config: Config = {
   url: 'https://edgeproxy.edge.cloud',
   baseUrl: '/',
 
-  organizationName: 'edge-cloud',
+  organizationName: 'andrebassi',
   projectName: 'edgeproxy',
 
   onBrokenLinks: 'throw',
@@ -42,7 +42,7 @@ const config: Config = {
         docs: {
           path: 'markdown',
           sidebarPath: './sidebars.ts',
-          editUrl: 'https://github.com/edge-cloud/edgeproxy/tree/main/docs/',
+          editUrl: 'https://github.com/andrebassi/edgeproxy/tree/main/docs/',
         },
         blog: false,
         theme: {
@@ -77,7 +77,7 @@ const config: Config = {
           position: 'right',
         },
         {
-          href: 'https://github.com/edge-cloud/edgeproxy',
+          href: 'https://github.com/andrebassi/edgeproxy',
           label: 'GitHub',
           position: 'right',
         },

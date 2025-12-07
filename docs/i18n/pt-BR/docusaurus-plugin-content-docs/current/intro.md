@@ -1,9 +1,10 @@
 ---
 sidebar_position: 1
+sidebar_label: "O que é?"
 slug: /
 ---
 
-# edgeProxy
+# O que é o edgeProxy?
 
 **edgeProxy** é um proxy TCP distribuído de alta performance escrito em Rust, projetado para operar em Points of Presence (POPs) ao redor do mundo. Ele roteia conexões de clientes para backends otimais baseado em proximidade geográfica, saúde do backend, carga atual e limites de capacidade.
 
@@ -34,7 +35,7 @@ slug: /
 
 ```bash
 # Clone o repositório
-git clone https://github.com/edge-cloud/edgeproxy.git
+git clone https://github.com/andrebassi/edgeproxy.git
 cd edgeproxy
 
 # Build e execução

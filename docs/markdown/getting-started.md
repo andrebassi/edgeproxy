@@ -28,7 +28,7 @@ The MaxMind GeoLite2 database is **embedded in the binary** - no external downlo
 
 ```bash
 # Clone repository
-git clone https://github.com/edge-cloud/edgeproxy.git
+git clone https://github.com/andrebassi/edgeproxy.git
 cd edgeproxy
 
 # Build release binary

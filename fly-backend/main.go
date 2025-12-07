@@ -2,6 +2,7 @@ package main
 
 import (
 	"crypto/rand"
+	"database/sql"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -11,6 +12,8 @@ import (
 	"strings"
 	"sync/atomic"
 	"time"
+
+	_ "github.com/lib/pq"
 )
 
 var regionNames = map[string]struct {
@@ -37,6 +40,7 @@ var (
 	requestCount   uint64
 	bytesServed    uint64
 	startTime      time.Time
+	db             *sql.DB
 )
 
 func main() {
@@ -62,6 +66,9 @@ func main() {
 
 	startTime = time.Now()
 
+	// Initialize database if configured
+	initDB()
+
 	// Basic endpoints
 	http.HandleFunc("/", handleRequest)
 	http.HandleFunc("/health", handleHealth)
@@ -73,6 +80,10 @@ func main() {
 	http.HandleFunc("/api/latency", handleLatency)
 	http.HandleFunc("/api/stats", handleStats)
 	http.HandleFunc("/api/info", handleInfo)
+
+	// RDS Benchmark endpoints (v4)
+	http.HandleFunc("/api/rds/benchmark", handleRDSBenchmark)
+	http.HandleFunc("/api/rds/health", handleRDSHealth)
 
 	fmt.Printf("Backend v2 running in region [%s] on port %s\n", region, port)
 	fmt.Printf("Benchmark page: http://localhost:%s/benchmark\n", port)
@@ -86,6 +97,157 @@ func main() {
 func handleHealth(w http.ResponseWriter, r *http.Request) {
 	w.WriteHeader(http.StatusOK)
 	fmt.Fprintf(w, "OK - Region: %s", region)
+}
+
+func getEnv(key, defaultValue string) string {
+	if value := os.Getenv(key); value != "" {
+		return value
+	}
+	return defaultValue
+}
+
+func initDB() {
+	dbHost := getEnv("DB_HOST", "")
+	if dbHost == "" {
+		fmt.Println("DB_HOST not set, RDS benchmark disabled")
+		return
+	}
+
+	dbPort := getEnv("DB_PORT", "5432")
+	dbUser := getEnv("DB_USER", "postgres")
+	dbPassword := getEnv("DB_PASSWORD", "")
+	dbName := getEnv("DB_NAME", "contacts")
+
+	connStr := fmt.Sprintf("host=%s port=%s user=%s password=%s dbname=%s sslmode=disable",
+		dbHost, dbPort, dbUser, dbPassword, dbName)
+
+	var err error
+	db, err = sql.Open("postgres", connStr)
+	if err != nil {
+		fmt.Printf("Failed to open database: %v\n", err)
+		return
+	}
+
+	db.SetMaxOpenConns(10)
+	db.SetMaxIdleConns(5)
+	db.SetConnMaxLifetime(time.Minute * 5)
+
+	if err := db.Ping(); err != nil {
+		fmt.Printf("Failed to ping database: %v\n", err)
+		db = nil
+		return
+	}
+
+	fmt.Printf("Database connected: %s\n", dbHost)
+}
+
+func handleRDSHealth(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Fly-Region", region)
+
+	dbHost := getEnv("DB_HOST", "not configured")
+
+	result := map[string]interface{}{
+		"region":  region,
+		"db_host": dbHost,
+	}
+
+	if db == nil {
+		result["status"] = "disabled"
+		result["message"] = "Database not configured"
+	} else if err := db.Ping(); err != nil {
+		result["status"] = "error"
+		result["message"] = err.Error()
+	} else {
+		result["status"] = "connected"
+	}
+
+	json.NewEncoder(w).Encode(result)
+}
+
+func handleRDSBenchmark(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Fly-Region", region)
+
+	dbHost := getEnv("DB_HOST", "not configured")
+
+	if db == nil {
+		json.NewEncoder(w).Encode(map[string]interface{}{
+			"error":   "Database not configured",
+			"region":  region,
+			"db_host": dbHost,
+		})
+		return
+	}
+
+	iterations := 10
+	if iter := r.URL.Query().Get("iterations"); iter != "" {
+		if n, err := strconv.Atoi(iter); err == nil && n > 0 && n <= 100 {
+			iterations = n
+		}
+	}
+
+	readLatencies := make([]float64, iterations)
+	insertLatencies := make([]float64, iterations)
+
+	// Run READ benchmarks
+	for i := 0; i < iterations; i++ {
+		start := time.Now()
+		var count int
+		db.QueryRow("SELECT COUNT(*) FROM contacts").Scan(&count)
+		readLatencies[i] = float64(time.Since(start).Microseconds()) / 1000.0
+	}
+
+	// Run INSERT benchmarks
+	for i := 0; i < iterations; i++ {
+		start := time.Now()
+		name := fmt.Sprintf("Bench-%s-%d-%d", region, time.Now().UnixNano(), i)
+		email := fmt.Sprintf("bench-%d@test.local", time.Now().UnixNano())
+		db.Exec(`INSERT INTO contacts (name, email, notes) VALUES ($1, $2, $3)`,
+			name, email, "Benchmark")
+		insertLatencies[i] = float64(time.Since(start).Microseconds()) / 1000.0
+	}
+
+	// Calculate stats
+	calcStats := func(latencies []float64) (avg, min, max float64) {
+		if len(latencies) == 0 {
+			return 0, 0, 0
+		}
+		min = latencies[0]
+		max = latencies[0]
+		var sum float64
+		for _, l := range latencies {
+			sum += l
+			if l < min {
+				min = l
+			}
+			if l > max {
+				max = l
+			}
+		}
+		avg = sum / float64(len(latencies))
+		return
+	}
+
+	readAvg, readMin, readMax := calcStats(readLatencies)
+	insertAvg, insertMin, insertMax := calcStats(insertLatencies)
+
+	result := map[string]interface{}{
+		"region":           region,
+		"db_host":          dbHost,
+		"iterations":       iterations,
+		"read_avg_ms":      readAvg,
+		"read_min_ms":      readMin,
+		"read_max_ms":      readMax,
+		"insert_avg_ms":    insertAvg,
+		"insert_min_ms":    insertMin,
+		"insert_max_ms":    insertMax,
+		"read_latencies":   readLatencies,
+		"insert_latencies": insertLatencies,
+		"timestamp":        time.Now().UTC().Format(time.RFC3339),
+	}
+
+	json.NewEncoder(w).Encode(result)
 }
 
 func handleRequest(w http.ResponseWriter, r *http.Request) {

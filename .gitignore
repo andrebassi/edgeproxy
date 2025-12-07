@@ -29,3 +29,4 @@ routing.db
 docs/node_modules/
 docs/.docusaurus/
 docs/build/
+.keys/

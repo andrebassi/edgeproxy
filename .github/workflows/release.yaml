@@ -26,6 +26,11 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v4
 
+      - name: Download GeoLite2 database
+        run: |
+          curl -L -o GeoLite2-Country.mmdb "https://github.com/P3TERX/GeoLite.mmdb/raw/download/GeoLite2-Country.mmdb"
+          ls -la GeoLite2-Country.mmdb
+
       - name: Set up Rust
         uses: dtolnay/rust-toolchain@stable
         with:
