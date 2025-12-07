@@ -1,0 +1,123 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 800 500">
+  <defs>
+    <marker id="arrowhead" markerWidth="10" markerHeight="7" refX="9" refY="3.5" orient="auto">
+      <polygon points="0 0, 10 3.5, 0 7" fill="#6366f1"/>
+    </marker>
+    <linearGradient id="popGradient" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" style="stop-color:#818cf8"/>
+      <stop offset="100%" style="stop-color:#6366f1"/>
+    </linearGradient>
+    <linearGradient id="backendGradient" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" style="stop-color:#34d399"/>
+      <stop offset="100%" style="stop-color:#10b981"/>
+    </linearGradient>
+  </defs>
+
+  <!-- Background -->
+  <rect width="800" height="500" fill="#0f172a"/>
+
+  <!-- Title -->
+  <text x="400" y="35" text-anchor="middle" fill="#f8fafc" font-family="system-ui" font-size="18" font-weight="bold">WireGuard Full Mesh Network (10.50.0.0/16)</text>
+
+  <!-- POPs Row -->
+  <!-- POP HKG -->
+  <rect x="50" y="80" width="120" height="60" rx="8" fill="url(#popGradient)"/>
+  <text x="110" y="105" text-anchor="middle" fill="white" font-family="system-ui" font-size="12" font-weight="bold">POP HKG</text>
+  <text x="110" y="125" text-anchor="middle" fill="#e0e7ff" font-family="monospace" font-size="10">10.50.5.1</text>
+
+  <!-- POP EU -->
+  <rect x="340" y="80" width="120" height="60" rx="8" fill="url(#popGradient)"/>
+  <text x="400" y="105" text-anchor="middle" fill="white" font-family="system-ui" font-size="12" font-weight="bold">POP EU</text>
+  <text x="400" y="125" text-anchor="middle" fill="#e0e7ff" font-family="monospace" font-size="10">10.50.0.1</text>
+
+  <!-- POP US -->
+  <rect x="630" y="80" width="120" height="60" rx="8" fill="url(#popGradient)"/>
+  <text x="690" y="105" text-anchor="middle" fill="white" font-family="system-ui" font-size="12" font-weight="bold">POP US</text>
+  <text x="690" y="125" text-anchor="middle" fill="#e0e7ff" font-family="monospace" font-size="10">10.50.2.x</text>
+
+  <!-- Connections between POPs -->
+  <line x1="170" y1="110" x2="340" y2="110" stroke="#6366f1" stroke-width="2" stroke-dasharray="5,5"/>
+  <line x1="460" y1="110" x2="630" y2="110" stroke="#6366f1" stroke-width="2" stroke-dasharray="5,5"/>
+  <path d="M 110 140 Q 110 200 400 200 Q 690 200 690 140" stroke="#6366f1" stroke-width="2" stroke-dasharray="5,5" fill="none"/>
+
+  <!-- Region Labels -->
+  <text x="110" y="180" text-anchor="middle" fill="#94a3b8" font-family="system-ui" font-size="11">APAC</text>
+  <text x="400" y="180" text-anchor="middle" fill="#94a3b8" font-family="system-ui" font-size="11">EMEA</text>
+  <text x="690" y="180" text-anchor="middle" fill="#94a3b8" font-family="system-ui" font-size="11">NAM</text>
+
+  <!-- APAC Backends -->
+  <rect x="30" y="250" width="80" height="50" rx="6" fill="url(#backendGradient)"/>
+  <text x="70" y="272" text-anchor="middle" fill="white" font-family="system-ui" font-size="10" font-weight="bold">NRT</text>
+  <text x="70" y="288" text-anchor="middle" fill="#d1fae5" font-family="monospace" font-size="9">10.50.4.1</text>
+
+  <rect x="120" y="250" width="80" height="50" rx="6" fill="url(#backendGradient)"/>
+  <text x="160" y="272" text-anchor="middle" fill="white" font-family="system-ui" font-size="10" font-weight="bold">SIN</text>
+  <text x="160" y="288" text-anchor="middle" fill="#d1fae5" font-family="monospace" font-size="9">10.50.4.2</text>
+
+  <rect x="30" y="310" width="80" height="50" rx="6" fill="url(#backendGradient)"/>
+  <text x="70" y="332" text-anchor="middle" fill="white" font-family="system-ui" font-size="10" font-weight="bold">SYD</text>
+  <text x="70" y="348" text-anchor="middle" fill="#d1fae5" font-family="monospace" font-size="9">10.50.4.3</text>
+
+  <!-- EMEA Backends -->
+  <rect x="320" y="250" width="80" height="50" rx="6" fill="url(#backendGradient)"/>
+  <text x="360" y="272" text-anchor="middle" fill="white" font-family="system-ui" font-size="10" font-weight="bold">LHR</text>
+  <text x="360" y="288" text-anchor="middle" fill="#d1fae5" font-family="monospace" font-size="9">10.50.3.1</text>
+
+  <rect x="410" y="250" width="80" height="50" rx="6" fill="url(#backendGradient)"/>
+  <text x="450" y="272" text-anchor="middle" fill="white" font-family="system-ui" font-size="10" font-weight="bold">FRA</text>
+  <text x="450" y="288" text-anchor="middle" fill="#d1fae5" font-family="monospace" font-size="9">10.50.3.2</text>
+
+  <rect x="320" y="310" width="80" height="50" rx="6" fill="url(#backendGradient)"/>
+  <text x="360" y="332" text-anchor="middle" fill="white" font-family="system-ui" font-size="10" font-weight="bold">CDG</text>
+  <text x="360" y="348" text-anchor="middle" fill="#d1fae5" font-family="monospace" font-size="9">10.50.3.3</text>
+
+  <rect x="410" y="310" width="80" height="50" rx="6" fill="url(#backendGradient)"/>
+  <text x="450" y="332" text-anchor="middle" fill="white" font-family="system-ui" font-size="10" font-weight="bold">GRU</text>
+  <text x="450" y="348" text-anchor="middle" fill="#d1fae5" font-family="monospace" font-size="9">10.50.1.1</text>
+
+  <!-- NAM Backends -->
+  <rect x="610" y="250" width="80" height="50" rx="6" fill="url(#backendGradient)"/>
+  <text x="650" y="272" text-anchor="middle" fill="white" font-family="system-ui" font-size="10" font-weight="bold">IAD</text>
+  <text x="650" y="288" text-anchor="middle" fill="#d1fae5" font-family="monospace" font-size="9">10.50.2.1</text>
+
+  <rect x="700" y="250" width="80" height="50" rx="6" fill="url(#backendGradient)"/>
+  <text x="740" y="272" text-anchor="middle" fill="white" font-family="system-ui" font-size="10" font-weight="bold">ORD</text>
+  <text x="740" y="288" text-anchor="middle" fill="#d1fae5" font-family="monospace" font-size="9">10.50.2.2</text>
+
+  <rect x="655" y="310" width="80" height="50" rx="6" fill="url(#backendGradient)"/>
+  <text x="695" y="332" text-anchor="middle" fill="white" font-family="system-ui" font-size="10" font-weight="bold">LAX</text>
+  <text x="695" y="348" text-anchor="middle" fill="#d1fae5" font-family="monospace" font-size="9">10.50.2.3</text>
+
+  <!-- POP to Backend connections -->
+  <line x1="110" y1="140" x2="70" y2="250" stroke="#10b981" stroke-width="2"/>
+  <line x1="110" y1="140" x2="160" y2="250" stroke="#10b981" stroke-width="2"/>
+  <line x1="110" y1="140" x2="70" y2="310" stroke="#10b981" stroke-width="2"/>
+
+  <line x1="400" y1="140" x2="360" y2="250" stroke="#10b981" stroke-width="2"/>
+  <line x1="400" y1="140" x2="450" y2="250" stroke="#10b981" stroke-width="2"/>
+  <line x1="400" y1="140" x2="360" y2="310" stroke="#10b981" stroke-width="2"/>
+  <line x1="400" y1="140" x2="450" y2="310" stroke="#10b981" stroke-width="2"/>
+
+  <line x1="690" y1="140" x2="650" y2="250" stroke="#10b981" stroke-width="2"/>
+  <line x1="690" y1="140" x2="740" y2="250" stroke="#10b981" stroke-width="2"/>
+  <line x1="690" y1="140" x2="695" y2="310" stroke="#10b981" stroke-width="2"/>
+
+  <!-- Direct Mesh Label -->
+  <rect x="50" y="400" width="120" height="30" rx="4" fill="#1e293b" stroke="#6366f1"/>
+  <text x="110" y="420" text-anchor="middle" fill="#818cf8" font-family="system-ui" font-size="10">Direct Mesh (38-122ms)</text>
+
+  <!-- Legend (no background) -->
+  <text x="630" y="420" text-anchor="middle" fill="#f8fafc" font-family="system-ui" font-size="11" font-weight="bold">Legend</text>
+
+  <line x1="565" y1="435" x2="595" y2="435" stroke="#6366f1" stroke-width="2" stroke-dasharray="5,5"/>
+  <text x="605" y="439" fill="#94a3b8" font-family="system-ui" font-size="10">Inter-POP mesh</text>
+
+  <line x1="565" y1="455" x2="595" y2="455" stroke="#10b981" stroke-width="2"/>
+  <text x="605" y="459" fill="#94a3b8" font-family="system-ui" font-size="10">POP to Backend</text>
+
+  <rect x="565" y="467" width="25" height="12" rx="2" fill="url(#popGradient)"/>
+  <text x="605" y="477" fill="#94a3b8" font-family="system-ui" font-size="10">POP Node</text>
+
+  <rect x="565" y="485" width="25" height="12" rx="2" fill="url(#backendGradient)"/>
+  <text x="605" y="495" fill="#94a3b8" font-family="system-ui" font-size="10">Backend</text>
+</svg>

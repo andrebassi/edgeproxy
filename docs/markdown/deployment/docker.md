@@ -383,7 +383,7 @@ DEBUG edge_proxy::proxy: proxying 10.10.0.100 -> sa-node-1 (10.10.1.1:8080)
 INFO edge_proxy::db: routing reload ok, version=5 backends=9
 ```
 
-For Prometheus integration, see [Kubernetes Deployment](./kubernetes).
+For Prometheus integration, see [Fly.io Deployment](./flyio).
 
 ## Troubleshooting
 
@@ -426,6 +426,6 @@ docker compose exec pop-sa sqlite3 /app/routing.db "SELECT id, healthy FROM back
 
 ## Next Steps
 
-- [Kubernetes Deployment](./kubernetes) - K8s manifests and operators
+- [Fly.io Deployment](./flyio) - Global edge deployment
 - [Configuration](../configuration) - Environment variables
 - [Architecture](../architecture) - System design

@@ -1,0 +1,61 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 700 300">
+  <defs>
+    <linearGradient id="boxGradient1" x1="0%" y1="0%" x2="0%" y2="100%">
+      <stop offset="0%" style="stop-color:#4a5568"/>
+      <stop offset="100%" style="stop-color:#2d3748"/>
+    </linearGradient>
+    <linearGradient id="headerGradient1" x1="0%" y1="0%" x2="0%" y2="100%">
+      <stop offset="0%" style="stop-color:#667eea"/>
+      <stop offset="100%" style="stop-color:#5a67d8"/>
+    </linearGradient>
+  </defs>
+
+  <!-- Background -->
+  <rect width="700" height="300" fill="#1a202c"/>
+
+  <!-- Main container -->
+  <rect x="20" y="20" width="660" height="260" rx="8" fill="url(#boxGradient1)" stroke="#4a5568" stroke-width="2"/>
+
+  <!-- Header -->
+  <rect x="20" y="20" width="660" height="40" rx="8" fill="url(#headerGradient1)"/>
+  <rect x="20" y="50" width="660" height="10" fill="url(#headerGradient1)"/>
+  <text x="350" y="47" fill="white" font-family="Arial, sans-serif" font-size="16" font-weight="bold" text-anchor="middle">Internal DNS Service</text>
+
+  <!-- edgeProxy box -->
+  <rect x="60" y="100" width="120" height="60" rx="6" fill="#2d3748" stroke="#667eea" stroke-width="2"/>
+  <text x="120" y="125" fill="white" font-family="Arial, sans-serif" font-size="13" font-weight="bold" text-anchor="middle">edgeProxy</text>
+  <text x="120" y="145" fill="#a0aec0" font-family="Arial, sans-serif" font-size="11" text-anchor="middle">(query)</text>
+
+  <!-- Arrow 1 -->
+  <line x1="180" y1="130" x2="250" y2="130" stroke="#667eea" stroke-width="2"/>
+  <polygon points="250,130 240,125 240,135" fill="#667eea"/>
+
+  <!-- CoreDNS box -->
+  <rect x="260" y="100" width="120" height="60" rx="6" fill="#2d3748" stroke="#48bb78" stroke-width="2"/>
+  <text x="320" y="125" fill="white" font-family="Arial, sans-serif" font-size="13" font-weight="bold" text-anchor="middle">CoreDNS</text>
+  <text x="320" y="145" fill="#a0aec0" font-family="Arial, sans-serif" font-size="11" text-anchor="middle">(resolver)</text>
+
+  <!-- Arrow 2 -->
+  <line x1="380" y1="130" x2="450" y2="130" stroke="#48bb78" stroke-width="2"/>
+  <polygon points="450,130 440,125 440,135" fill="#48bb78"/>
+
+  <!-- routing.db box -->
+  <rect x="460" y="100" width="120" height="60" rx="6" fill="#2d3748" stroke="#ed8936" stroke-width="2"/>
+  <text x="520" y="125" fill="white" font-family="Arial, sans-serif" font-size="13" font-weight="bold" text-anchor="middle">routing.db</text>
+  <text x="520" y="145" fill="#a0aec0" font-family="Arial, sans-serif" font-size="11" text-anchor="middle">(backend)</text>
+
+  <!-- DNS Zones section -->
+  <text x="60" y="200" fill="#a0aec0" font-family="Arial, sans-serif" font-size="12" font-weight="bold">DNS Zones:</text>
+
+  <circle cx="70" cy="220" r="4" fill="#667eea"/>
+  <text x="85" y="224" fill="#e2e8f0" font-family="monospace" font-size="11">backends.internal</text>
+  <text x="230" y="224" fill="#a0aec0" font-family="Arial, sans-serif" font-size="11">→ Backend WireGuard IPs</text>
+
+  <circle cx="70" cy="242" r="4" fill="#48bb78"/>
+  <text x="85" y="246" fill="#e2e8f0" font-family="monospace" font-size="11">pops.internal</text>
+  <text x="230" y="246" fill="#a0aec0" font-family="Arial, sans-serif" font-size="11">→ POP WireGuard IPs</text>
+
+  <circle cx="70" cy="264" r="4" fill="#ed8936"/>
+  <text x="85" y="268" fill="#e2e8f0" font-family="monospace" font-size="11">services.internal</text>
+  <text x="230" y="268" fill="#a0aec0" font-family="Arial, sans-serif" font-size="11">→ Service endpoints</text>
+</svg>

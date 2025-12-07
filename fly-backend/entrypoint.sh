@@ -4,9 +4,13 @@ set -e
 echo "=== Starting WireGuard + Backend ==="
 echo "FLY_REGION: ${FLY_REGION}"
 
-# EC2 endpoint e public key
+# EC2 endpoint e public key (hub)
 EC2_ENDPOINT="54.171.48.207:51820"
 EC2_PUBKEY="bzM6rw/efq+75VGhBgkCRChDnKfFlXQY560ejhvKCQY="
+
+# GCP HKG endpoint e public key (full mesh para APAC)
+HKG_ENDPOINT="35.241.112.61:51820"
+HKG_PUBKEY="GxuSsvO9/raKe5WctZQfX5tkHOrTf0PLJWmHEzrw1Go="
 
 # Mapear região para IP e chave privada
 case "${FLY_REGION}" in
@@ -60,17 +64,36 @@ echo "Configuring WireGuard with IP: ${WG_IP}"
 
 # Criar configuração WireGuard
 mkdir -p /etc/wireguard
+
+# Config base com EC2 como hub
 cat > /etc/wireguard/wg0.conf << WGEOF
 [Interface]
 PrivateKey = ${WG_PRIVATE}
 Address = ${WG_IP}
 
 [Peer]
+# EC2 Ireland (hub)
 PublicKey = ${EC2_PUBKEY}
 Endpoint = ${EC2_ENDPOINT}
-AllowedIPs = 10.50.0.0/16
+AllowedIPs = 10.50.0.0/24, 10.50.1.0/24, 10.50.2.0/24, 10.50.3.0/24
 PersistentKeepalive = 25
 WGEOF
+
+# Adicionar HKG como peer direto para regiões APAC
+case "${FLY_REGION}" in
+  nrt|sin|syd)
+    echo "Adding HKG direct peer for APAC region..."
+    cat >> /etc/wireguard/wg0.conf << WGEOF
+
+[Peer]
+# GCP HKG (direct mesh for APAC)
+PublicKey = ${HKG_PUBKEY}
+Endpoint = ${HKG_ENDPOINT}
+AllowedIPs = 10.50.5.0/24
+PersistentKeepalive = 25
+WGEOF
+    ;;
+esac
 
 # Iniciar WireGuard
 echo "Starting WireGuard interface..."

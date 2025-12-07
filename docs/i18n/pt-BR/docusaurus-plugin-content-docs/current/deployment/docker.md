@@ -357,6 +357,6 @@ docker compose exec pop-sa sqlite3 /app/routing.db "SELECT id, healthy FROM back
 
 ## Próximos Passos
 
-- [Deploy com Kubernetes](./kubernetes) - Manifests K8s e operators
+- [Deploy com Fly.io](./flyio) - Deploy global no edge
 - [Configuração](../configuration) - Variáveis de ambiente
 - [Arquitetura](../architecture) - Design do sistema

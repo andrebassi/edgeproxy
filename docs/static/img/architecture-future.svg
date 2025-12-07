@@ -1,0 +1,137 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 900 600">
+  <defs>
+    <linearGradient id="anycastGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" style="stop-color:#f59e0b"/>
+      <stop offset="100%" style="stop-color:#d97706"/>
+    </linearGradient>
+    <linearGradient id="popGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" style="stop-color:#818cf8"/>
+      <stop offset="100%" style="stop-color:#6366f1"/>
+    </linearGradient>
+    <linearGradient id="controlGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" style="stop-color:#34d399"/>
+      <stop offset="100%" style="stop-color:#10b981"/>
+    </linearGradient>
+    <linearGradient id="backendGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" style="stop-color:#60a5fa"/>
+      <stop offset="100%" style="stop-color:#3b82f6"/>
+    </linearGradient>
+  </defs>
+
+  <!-- Background -->
+  <rect width="900" height="600" fill="#0f172a"/>
+
+  <!-- Title -->
+  <text x="450" y="30" text-anchor="middle" fill="#f8fafc" font-family="system-ui" font-size="20" font-weight="bold">edgeProxy v2 - Future Architecture</text>
+  <text x="450" y="52" text-anchor="middle" fill="#94a3b8" font-family="system-ui" font-size="12">Anycast BGP + Corrosion + 6PN + Auto-Discovery</text>
+
+  <!-- Internet/Users -->
+  <text x="450" y="85" text-anchor="middle" fill="#94a3b8" font-family="system-ui" font-size="11">INTERNET</text>
+  <line x1="100" y1="90" x2="800" y2="90" stroke="#334155" stroke-width="1" stroke-dasharray="4,4"/>
+
+  <!-- Anycast BGP Layer -->
+  <rect x="350" y="100" width="200" height="50" rx="8" fill="url(#anycastGrad)"/>
+  <text x="450" y="122" text-anchor="middle" fill="white" font-family="system-ui" font-size="12" font-weight="bold">ANYCAST BGP</text>
+  <text x="450" y="138" text-anchor="middle" fill="#fef3c7" font-family="monospace" font-size="10">198.51.100.0/24</text>
+
+  <!-- Arrow from Anycast to POPs -->
+  <line x1="450" y1="150" x2="450" y2="170" stroke="#f59e0b" stroke-width="2"/>
+  <line x1="450" y1="170" x2="150" y2="200" stroke="#f59e0b" stroke-width="2"/>
+  <line x1="450" y1="170" x2="450" y2="200" stroke="#f59e0b" stroke-width="2"/>
+  <line x1="450" y1="170" x2="750" y2="200" stroke="#f59e0b" stroke-width="2"/>
+
+  <!-- POPs Layer -->
+  <!-- POP APAC -->
+  <rect x="70" y="200" width="160" height="70" rx="8" fill="url(#popGrad)"/>
+  <text x="150" y="225" text-anchor="middle" fill="white" font-family="system-ui" font-size="12" font-weight="bold">POP APAC</text>
+  <text x="150" y="242" text-anchor="middle" fill="#e0e7ff" font-family="system-ui" font-size="10">HKG / NRT / SIN</text>
+  <text x="150" y="260" text-anchor="middle" fill="#c7d2fe" font-family="monospace" font-size="9">fd00:edgeproxy:0004::/64</text>
+
+  <!-- POP EU -->
+  <rect x="370" y="200" width="160" height="70" rx="8" fill="url(#popGrad)"/>
+  <text x="450" y="225" text-anchor="middle" fill="white" font-family="system-ui" font-size="12" font-weight="bold">POP EU</text>
+  <text x="450" y="242" text-anchor="middle" fill="#e0e7ff" font-family="system-ui" font-size="10">Ireland / LHR / FRA</text>
+  <text x="450" y="260" text-anchor="middle" fill="#c7d2fe" font-family="monospace" font-size="9">fd00:edgeproxy:0001::/64</text>
+
+  <!-- POP NAM -->
+  <rect x="670" y="200" width="160" height="70" rx="8" fill="url(#popGrad)"/>
+  <text x="750" y="225" text-anchor="middle" fill="white" font-family="system-ui" font-size="12" font-weight="bold">POP NAM</text>
+  <text x="750" y="242" text-anchor="middle" fill="#e0e7ff" font-family="system-ui" font-size="10">Virginia / Chicago</text>
+  <text x="750" y="260" text-anchor="middle" fill="#c7d2fe" font-family="monospace" font-size="9">fd00:edgeproxy:0002::/64</text>
+
+  <!-- Mesh connections between POPs -->
+  <line x1="230" y1="235" x2="370" y2="235" stroke="#22c55e" stroke-width="2"/>
+  <line x1="530" y1="235" x2="670" y2="235" stroke="#22c55e" stroke-width="2"/>
+  <path d="M 150 270 Q 150 300 450 300 Q 750 300 750 270" stroke="#22c55e" stroke-width="2" fill="none" stroke-dasharray="5,5"/>
+
+  <!-- Control Plane (Corrosion) -->
+  <rect x="300" y="320" width="300" height="60" rx="8" fill="url(#controlGrad)"/>
+  <text x="450" y="345" text-anchor="middle" fill="white" font-family="system-ui" font-size="12" font-weight="bold">CORROSION CLUSTER</text>
+  <text x="450" y="365" text-anchor="middle" fill="#d1fae5" font-family="system-ui" font-size="10">Distributed Control Plane (SQLite + CRDTs)</text>
+
+  <!-- Internal DNS -->
+  <rect x="620" y="320" width="140" height="60" rx="8" fill="#1e293b" stroke="#60a5fa" stroke-width="2"/>
+  <text x="690" y="345" text-anchor="middle" fill="#60a5fa" font-family="system-ui" font-size="11" font-weight="bold">INTERNAL DNS</text>
+  <text x="690" y="362" text-anchor="middle" fill="#94a3b8" font-family="monospace" font-size="9">*.internal zones</text>
+
+  <!-- WireGuard 6PN Mesh -->
+  <rect x="100" y="400" width="700" height="40" rx="6" fill="#1e293b" stroke="#88171a" stroke-width="2"/>
+  <text x="450" y="425" text-anchor="middle" fill="#88171a" font-family="system-ui" font-size="12" font-weight="bold">WIREGUARD 6PN MESH (fd00:edgeproxy::/48)</text>
+
+  <!-- Backends -->
+  <!-- APAC Backends -->
+  <rect x="70" y="470" width="160" height="80" rx="6" fill="url(#backendGrad)"/>
+  <text x="150" y="495" text-anchor="middle" fill="white" font-family="system-ui" font-size="11" font-weight="bold">APAC Backends</text>
+  <text x="150" y="512" text-anchor="middle" fill="#dbeafe" font-family="system-ui" font-size="9">NRT / SIN / SYD</text>
+  <text x="150" y="530" text-anchor="middle" fill="#93c5fd" font-family="system-ui" font-size="9">Auto-registered</text>
+  <circle cx="220" cy="480" r="8" fill="#22c55e"/>
+  <text x="220" y="484" text-anchor="middle" fill="white" font-family="system-ui" font-size="8">A</text>
+
+  <!-- EU Backends -->
+  <rect x="370" y="470" width="160" height="80" rx="6" fill="url(#backendGrad)"/>
+  <text x="450" y="495" text-anchor="middle" fill="white" font-family="system-ui" font-size="11" font-weight="bold">EMEA Backends</text>
+  <text x="450" y="512" text-anchor="middle" fill="#dbeafe" font-family="system-ui" font-size="9">LHR / FRA / CDG</text>
+  <text x="450" y="530" text-anchor="middle" fill="#93c5fd" font-family="system-ui" font-size="9">Auto-registered</text>
+  <circle cx="520" cy="480" r="8" fill="#22c55e"/>
+  <text x="520" y="484" text-anchor="middle" fill="white" font-family="system-ui" font-size="8">A</text>
+
+  <!-- NAM Backends -->
+  <rect x="670" y="470" width="160" height="80" rx="6" fill="url(#backendGrad)"/>
+  <text x="750" y="495" text-anchor="middle" fill="white" font-family="system-ui" font-size="11" font-weight="bold">NAM/SA Backends</text>
+  <text x="750" y="512" text-anchor="middle" fill="#dbeafe" font-family="system-ui" font-size="9">IAD / ORD / GRU</text>
+  <text x="750" y="530" text-anchor="middle" fill="#93c5fd" font-family="system-ui" font-size="9">Auto-registered</text>
+  <circle cx="820" cy="480" r="8" fill="#22c55e"/>
+  <text x="820" y="484" text-anchor="middle" fill="white" font-family="system-ui" font-size="8">A</text>
+
+  <!-- Connections: POPs to Corrosion -->
+  <line x1="150" y1="270" x2="300" y2="340" stroke="#10b981" stroke-width="1" stroke-dasharray="3,3"/>
+  <line x1="450" y1="270" x2="450" y2="320" stroke="#10b981" stroke-width="1" stroke-dasharray="3,3"/>
+  <line x1="750" y1="270" x2="600" y2="340" stroke="#10b981" stroke-width="1" stroke-dasharray="3,3"/>
+
+  <!-- Connections: 6PN to Backends -->
+  <line x1="150" y1="440" x2="150" y2="470" stroke="#88171a" stroke-width="2"/>
+  <line x1="450" y1="440" x2="450" y2="470" stroke="#88171a" stroke-width="2"/>
+  <line x1="750" y1="440" x2="750" y2="470" stroke="#88171a" stroke-width="2"/>
+
+  <!-- Legend -->
+  <rect x="50" y="565" width="800" height="30" rx="4" fill="#1e293b"/>
+
+  <circle cx="80" cy="580" r="6" fill="#f59e0b"/>
+  <text x="95" y="584" fill="#94a3b8" font-family="system-ui" font-size="9">Anycast BGP</text>
+
+  <line x1="180" y1="580" x2="210" y2="580" stroke="#22c55e" stroke-width="2"/>
+  <text x="220" y="584" fill="#94a3b8" font-family="system-ui" font-size="9">POP Mesh</text>
+
+  <rect x="300" y="574" width="20" height="12" rx="2" fill="url(#controlGrad)"/>
+  <text x="330" y="584" fill="#94a3b8" font-family="system-ui" font-size="9">Corrosion</text>
+
+  <line x1="410" y1="580" x2="440" y2="580" stroke="#88171a" stroke-width="2"/>
+  <text x="450" y="584" fill="#94a3b8" font-family="system-ui" font-size="9">6PN (WireGuard IPv6)</text>
+
+  <circle cx="580" cy="580" r="6" fill="#22c55e"/>
+  <text x="580" y="584" text-anchor="middle" fill="white" font-family="system-ui" font-size="7">A</text>
+  <text x="600" y="584" fill="#94a3b8" font-family="system-ui" font-size="9">Auto-registered</text>
+
+  <rect x="710" y="574" width="20" height="12" rx="2" fill="#60a5fa"/>
+  <text x="740" y="584" fill="#94a3b8" font-family="system-ui" font-size="9">Internal DNS</text>
+</svg>

@@ -1,5 +1,5 @@
 ---
-sidebar_position: 4
+sidebar_position: 5
 ---
 
 # Configuração
@@ -200,5 +200,5 @@ DEBUG edge_proxy::proxy: proxying 10.10.0.100 -> sa-node-1 (10.10.1.1:8080)
 ## Próximos Passos
 
 - [Deploy com Docker](./deployment/docker) - Configuração de container
-- [Deploy com Kubernetes](./deployment/kubernetes) - Manifests K8s
+- [Deploy com Fly.io](./deployment/flyio) - Deploy global no edge
 - [Internals do Load Balancer](./internals/load-balancer) - Detalhes de scoring
