@@ -4,6 +4,7 @@ import Link from '@docusaurus/Link';
 import useDocusaurusContext from '@docusaurus/useDocusaurusContext';
 import Layout from '@theme/Layout';
 import Heading from '@theme/Heading';
+import Translate, {translate} from '@docusaurus/Translate';
 
 import styles from './index.module.css';
 
@@ -15,12 +16,16 @@ function HomepageHeader() {
         <Heading as="h1" className="hero__title">
           {siteConfig.title}
         </Heading>
-        <p className="hero__subtitle">{siteConfig.tagline}</p>
+        <p className="hero__subtitle">
+          <Translate id="homepage.tagline">
+            Distributed TCP Proxy for Geo-Aware Load Balancing
+          </Translate>
+        </p>
         <div className={styles.buttons}>
           <Link
             className="button button--secondary button--lg"
             to="/docs">
-            Get Started
+            <Translate id="homepage.getStarted">Get Started</Translate>
           </Link>
         </div>
       </div>
@@ -45,16 +50,16 @@ function HomepageFeatures() {
       <div className="container">
         <div className="row">
           <Feature
-            title="Geo-Aware Routing"
-            description="Route clients to the nearest backend based on geographic location using MaxMind GeoIP."
+            title={translate({id: 'homepage.feature1.title', message: 'Geo-Aware Routing'})}
+            description={translate({id: 'homepage.feature1.description', message: 'Route clients to the nearest backend based on geographic location using MaxMind GeoIP.'})}
           />
           <Feature
-            title="High Performance"
-            description="Written in Rust with Tokio for zero-copy TCP proxying and minimal latency overhead."
+            title={translate({id: 'homepage.feature2.title', message: 'High Performance'})}
+            description={translate({id: 'homepage.feature2.description', message: 'Written in Rust with Tokio for zero-copy TCP proxying and minimal latency overhead.'})}
           />
           <Feature
-            title="Client Affinity"
-            description="Sticky sessions ensure consistent backend assignment with configurable TTL."
+            title={translate({id: 'homepage.feature3.title', message: 'Client Affinity'})}
+            description={translate({id: 'homepage.feature3.description', message: 'Sticky sessions ensure consistent backend assignment with configurable TTL.'})}
           />
         </div>
       </div>
@@ -67,7 +72,7 @@ export default function Home(): ReactNode {
   return (
     <Layout
       title="Home"
-      description="Distributed TCP Proxy for Geo-Aware Load Balancing">
+      description={translate({id: 'homepage.description', message: 'Distributed TCP Proxy for Geo-Aware Load Balancing'})}>
       <HomepageHeader />
       <main>
         <HomepageFeatures />

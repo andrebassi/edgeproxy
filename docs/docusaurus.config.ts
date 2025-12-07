@@ -18,7 +18,7 @@ const config: Config = {
   projectName: 'edgeproxy',
 
   onBrokenLinks: 'throw',
-  onBrokenMarkdownLinks: 'warn',
+  onBrokenAnchors: 'warn',
 
   i18n: {
     defaultLocale: 'en',
@@ -84,48 +84,7 @@ const config: Config = {
     },
     footer: {
       style: 'dark',
-      links: [
-        {
-          title: 'Docs',
-          items: [
-            {
-              label: 'Getting Started',
-              to: '/docs/getting-started',
-            },
-            {
-              label: 'Architecture',
-              to: '/docs/architecture',
-            },
-            {
-              label: 'Configuration',
-              to: '/docs/configuration',
-            },
-          ],
-        },
-        {
-          title: 'Deployment',
-          items: [
-            {
-              label: 'Docker',
-              to: '/docs/deployment/docker',
-            },
-            {
-              label: 'Kubernetes',
-              to: '/docs/deployment/kubernetes',
-            },
-          ],
-        },
-        {
-          title: 'More',
-          items: [
-            {
-              label: 'GitHub',
-              href: 'https://github.com/edge-cloud/edgeproxy',
-            },
-          ],
-        },
-      ],
-      copyright: `Copyright ${new Date().getFullYear()} edge.cloud. Built with Docusaurus.`,
+      copyright: `Copyright © ${new Date().getFullYear()} edgeProxy.<br/>Developed and maintained by <a href="https://andrebassi.com.br" target="_blank" rel="noopener noreferrer">André Bassi</a>`,
     },
     prism: {
       theme: prismThemes.github,

@@ -1,0 +1,38 @@
+{
+  "homepage.tagline": {
+    "message": "Proxy TCP Distribuído para Balanceamento de Carga Geo-Aware",
+    "description": "The tagline on the homepage"
+  },
+  "homepage.getStarted": {
+    "message": "Começar",
+    "description": "The get started button on the homepage"
+  },
+  "homepage.description": {
+    "message": "Proxy TCP Distribuído para Balanceamento de Carga Geo-Aware",
+    "description": "The description meta tag on the homepage"
+  },
+  "homepage.feature1.title": {
+    "message": "Roteamento Geo-Aware",
+    "description": "Title for feature 1"
+  },
+  "homepage.feature1.description": {
+    "message": "Roteie clientes para o backend mais próximo baseado na localização geográfica usando MaxMind GeoIP.",
+    "description": "Description for feature 1"
+  },
+  "homepage.feature2.title": {
+    "message": "Alta Performance",
+    "description": "Title for feature 2"
+  },
+  "homepage.feature2.description": {
+    "message": "Escrito em Rust com Tokio para proxy TCP zero-copy e overhead de latência mínimo.",
+    "description": "Description for feature 2"
+  },
+  "homepage.feature3.title": {
+    "message": "Afinidade de Cliente",
+    "description": "Title for feature 3"
+  },
+  "homepage.feature3.description": {
+    "message": "Sessões fixas garantem atribuição consistente de backend com TTL configurável.",
+    "description": "Description for feature 3"
+  }
+}
