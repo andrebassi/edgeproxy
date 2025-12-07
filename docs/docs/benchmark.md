@@ -2,7 +2,7 @@
 sidebar_position: 2
 ---
 
-# Global Benchmark Tests
+# Benchmarks
 
 This document presents the benchmark results for edgeProxy with WireGuard overlay network across 9 global VPN locations.
 
