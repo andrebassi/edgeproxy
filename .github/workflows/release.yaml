@@ -9,57 +9,71 @@ permissions:
   contents: write
 
 jobs:
-  build-docs:
-    name: Build Documentation
+  build:
+    name: Build binaries
     runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        include:
+          - target: x86_64-unknown-linux-gnu
+            os: linux
+            arch: amd64
+          - target: aarch64-unknown-linux-gnu
+            os: linux
+            arch: arm64
+
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
 
-      - name: Set up Node.js
-        uses: actions/setup-node@v4
+      - name: Set up Rust
+        uses: dtolnay/rust-action@stable
         with:
-          node-version: '20'
-          cache: 'npm'
-          cache-dependency-path: docs/package-lock.json
+          targets: ${{ matrix.target }}
 
-      - name: Install dependencies
-        working-directory: docs
-        run: npm ci
-
-      - name: Build documentation
-        working-directory: docs
-        run: npm run build
-
-      - name: Create docs tarball
+      - name: Install cross-compilation tools
+        if: matrix.arch == 'arm64'
         run: |
-          cd docs
-          tar -czvf ../docs-build.tar.gz build/
+          sudo apt-get update
+          sudo apt-get install -y gcc-aarch64-linux-gnu
+
+      - name: Build binary
+        run: |
+          if [ "${{ matrix.arch }}" = "arm64" ]; then
+            export CARGO_TARGET_AARCH64_UNKNOWN_LINUX_GNU_LINKER=aarch64-linux-gnu-gcc
+          fi
+          cargo build --release --target ${{ matrix.target }}
+          mkdir -p dist
+          cp target/${{ matrix.target }}/release/edge-proxy dist/edge-proxy-${{ matrix.os }}-${{ matrix.arch }}
+          chmod +x dist/edge-proxy-${{ matrix.os }}-${{ matrix.arch }}
 
       - name: Upload artifact
         uses: actions/upload-artifact@v4
         with:
-          name: docs-build
-          path: docs-build.tar.gz
+          name: edge-proxy-${{ matrix.os }}-${{ matrix.arch }}
+          path: dist/edge-proxy-${{ matrix.os }}-${{ matrix.arch }}
 
   release:
     name: Create Release
-    needs: build-docs
+    needs: build
     runs-on: ubuntu-latest
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
 
-      - name: Download docs artifact
+      - name: Download all artifacts
         uses: actions/download-artifact@v4
         with:
-          name: docs-build
           path: dist
+          merge-multiple: true
+
+      - name: List artifacts
+        run: ls -la dist/
 
       - name: Create checksums
         run: |
           cd dist
-          sha256sum docs-build.tar.gz > checksums.txt
+          sha256sum edge-proxy-* > checksums.txt
           cat checksums.txt
 
       - name: Create Release
@@ -70,23 +84,37 @@ jobs:
           prerelease: false
           generate_release_notes: true
           files: |
-            dist/docs-build.tar.gz
+            dist/edge-proxy-linux-amd64
+            dist/edge-proxy-linux-arm64
             dist/checksums.txt
           body: |
             ## edgeProxy ${{ github.ref_name }}
 
             Distributed TCP proxy for geo-aware load balancing across multiple regions.
 
-            ### Documentation
-
-            Built documentation site with EN and PT-BR locales included.
-
             ### Downloads
 
-            | File | Description |
-            |------|-------------|
-            | `docs-build.tar.gz` | Pre-built documentation site |
-            | `checksums.txt` | SHA256 checksums |
+            | Platform | Architecture | Download |
+            |----------|--------------|----------|
+            | Linux | x86_64 (amd64) | `edge-proxy-linux-amd64` |
+            | Linux | ARM64 | `edge-proxy-linux-arm64` |
+
+            ### Installation
+
+            ```bash
+            # Download (Linux amd64)
+            curl -L -o edge-proxy https://github.com/andrebassi/edgeproxy/releases/download/${{ github.ref_name }}/edge-proxy-linux-amd64
+            chmod +x edge-proxy
+            sudo mv edge-proxy /usr/local/bin/
+            ```
+
+            ### Configuration
+
+            ```bash
+            export EDGEPROXY_LISTEN_ADDR=0.0.0.0:8080
+            export EDGEPROXY_DB_PATH=routing.db
+            export EDGEPROXY_REGION=sa
+            ```
 
             ### Verify checksums
 
