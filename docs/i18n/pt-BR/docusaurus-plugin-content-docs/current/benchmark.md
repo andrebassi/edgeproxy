@@ -12,7 +12,71 @@ Para detalhes sobre como configurar a infraestrutura AWS EC2 e WireGuard usada n
 
 ---
 
-## Benchmark v2 (Atual)
+## Benchmark v3 (Atual)
+
+:::info Novo POP: Hong Kong
+Testando o novo POP GCP Hong Kong (`35.241.112.61`) para cobertura da região APAC.
+:::
+
+### Infraestrutura de Teste
+
+| Componente | Detalhes |
+|------------|----------|
+| **Novo POP** | GCP Hong Kong (asia-east2) |
+| **IP** | 35.241.112.61:8080 |
+| **Região** | `ap` (Ásia Pacífico) |
+| **Backends** | 10 (via WireGuard mesh) |
+
+### Resultados dos Testes
+
+| # | Localização VPN | País | Backend | Latência | Status |
+|---|-----------------|------|---------|----------|--------|
+| 1-3 | 🇨🇳🇭🇰 China/HK | CN/HK | **HKG** | - | ⏭️ (POP local) |
+| 4 | 🇯🇵 Tóquio | JP | **NRT** | ~1.79s | ✅ |
+| 5 | 🇸🇬 Singapura | SG | **SIN** | ~1.63s | ✅ |
+| 6 | 🇹🇼 Taiwan | TW | **NRT** | ~1.64s | ✅ |
+| 7 | 🇰🇷 Seoul | KR | **NRT** | ~1.71s | ✅ |
+| 8 | 🇮🇳 Índia | IN | **IAD** | ~1.58s | ✅ |
+| 9 | 🇦🇺 Sydney | AU | **SYD** | ~1.94s | ✅ |
+
+**Precisão do geo-routing: 6/6 (100%)**
+
+### Latência WireGuard Mesh (do HKG)
+
+| Backend | IP WireGuard | Latência Ping |
+|---------|--------------|---------------|
+| EC2 Irlanda (Hub) | 10.50.0.1 | 242ms |
+| GRU (São Paulo) | 10.50.1.1 | 445ms |
+| IAD (Virginia) | 10.50.2.1 | 327ms |
+| LHR (Londres) | 10.50.3.1 | 252ms |
+| NRT (Tóquio) | 10.50.4.1 | 492ms |
+| SIN (Singapura) | 10.50.4.2 | 408ms |
+
+### Executando Testes v3
+
+```bash
+# Testar conectividade ao POP HKG
+nc -zv 35.241.112.61 8080
+
+# Teste rápido de latência
+for i in {1..10}; do
+  curl -w "%{time_total}s\n" -o /dev/null -s http://35.241.112.61:8080/api/latency
+done
+
+# Verificar geo-routing
+curl -s http://35.241.112.61:8080/api/info | jq .
+```
+
+### Observações v3
+
+- Todo tráfego APAC corretamente roteado para backend regional mais próximo
+- Taiwan e Coreia roteiam para NRT (Tóquio) como esperado
+- Índia roteia para IAD (Virginia) - sem backend local disponível
+- Alta latência devido ao hub-and-spoke através do EC2 Irlanda
+
+---
+
+## Benchmark v2
 
 :::tip Todos os Testes Passaram
 - **Geo-Routing:** 9/9

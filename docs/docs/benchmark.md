@@ -12,13 +12,71 @@ For details on how to set up the AWS EC2 and WireGuard infrastructure used in th
 
 ---
 
-## Benchmark v2 (Current)
+## Benchmark v3 (Current)
 
-:::tip All Tests Passed
-- **Geo-Routing:** 9/9
-- **WireGuard:** 10/10 peers
-- **Status:** Complete
+:::info New POP: Hong Kong
+Testing the new GCP Hong Kong POP (`35.241.112.61`) for APAC region coverage.
 :::
+
+### Test Infrastructure
+
+| Component | Details |
+|-----------|---------|
+| **New POP** | GCP Hong Kong (asia-east2) |
+| **IP** | 35.241.112.61:8080 |
+| **Region** | `ap` (Asia Pacific) |
+| **Backends** | 10 (via WireGuard mesh) |
+
+### Test Results
+
+| # | VPN Location | Country | Backend | Latency | Status |
+|---|--------------|---------|---------|---------|--------|
+| 1-3 | 🇨🇳🇭🇰 China/HK | CN/HK | **HKG** | - | ⏭️ (local POP) |
+| 4 | 🇯🇵 Tokyo | JP | **NRT** | ~1.79s | ✅ |
+| 5 | 🇸🇬 Singapore | SG | **SIN** | ~1.63s | ✅ |
+| 6 | 🇹🇼 Taiwan | TW | **NRT** | ~1.64s | ✅ |
+| 7 | 🇰🇷 Seoul | KR | **NRT** | ~1.71s | ✅ |
+| 8 | 🇮🇳 India | IN | **IAD** | ~1.58s | ✅ |
+| 9 | 🇦🇺 Sydney | AU | **SYD** | ~1.94s | ✅ |
+
+**Geo-routing accuracy: 6/6 (100%)**
+
+### WireGuard Mesh Latency (from HKG)
+
+| Backend | WireGuard IP | Ping Latency |
+|---------|--------------|--------------|
+| EC2 Ireland (Hub) | 10.50.0.1 | 242ms |
+| GRU (São Paulo) | 10.50.1.1 | 445ms |
+| IAD (Virginia) | 10.50.2.1 | 327ms |
+| LHR (London) | 10.50.3.1 | 252ms |
+| NRT (Tokyo) | 10.50.4.1 | 492ms |
+| SIN (Singapore) | 10.50.4.2 | 408ms |
+
+### Running v3 Tests
+
+```bash
+# Test connectivity to HKG POP
+nc -zv 35.241.112.61 8080
+
+# Quick latency test
+for i in {1..10}; do
+  curl -w "%{time_total}s\n" -o /dev/null -s http://35.241.112.61:8080/api/latency
+done
+
+# Check geo-routing
+curl -s http://35.241.112.61:8080/api/info | jq .
+```
+
+### v3 Observations
+
+- All APAC traffic correctly routed to nearest regional backend
+- Taiwan and Korea route to NRT (Tokyo) as expected
+- India routes to IAD (Virginia) - no local backend available
+- High latency due to hub-and-spoke through EC2 Ireland
+
+---
+
+## Benchmark v2
 
 ### Test Results
 
