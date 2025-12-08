@@ -101,8 +101,6 @@ tasks:
 ### Step-by-Step Creation
 
 ```bash
-cd fly-backend
-
 # 1. Verify AWS credentials
 task aws:check
 

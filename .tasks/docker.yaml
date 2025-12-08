@@ -1,0 +1,56 @@
+version: '3'
+
+tasks:
+  build:
+    desc: Build Docker images
+    cmds:
+      - docker compose build
+
+  up:
+    desc: Start Docker environment (3 POPs + 9 backends)
+    cmds:
+      - docker compose up -d
+      - echo ""
+      - echo "edgeProxy Docker environment started"
+      - echo ""
+      - echo "POPs available at:"
+      - echo "  SA POP - localhost:8080"
+      - echo "  US POP - localhost:8081"
+      - echo "  EU POP - localhost:8082"
+      - echo ""
+      - echo "Run 'task docker:test' to execute tests"
+
+  down:
+    desc: Stop Docker environment
+    cmds:
+      - docker compose down
+
+  logs:
+    desc: Show Docker logs
+    cmds:
+      - docker compose logs -f
+
+  test:
+    desc: Run tests inside Docker
+    cmds:
+      - docker compose run --rm test-runner
+
+  test-host:
+    desc: Run tests from host against Docker containers
+    cmds:
+      - |
+        echo "Testing edgeProxy in Docker..."
+        echo ""
+        echo "SA POP (localhost:8080):"
+        echo "" | nc -w 2 localhost 8080 | head -1
+        echo ""
+        echo "US POP (localhost:8081):"
+        echo "" | nc -w 2 localhost 8081 | head -1
+        echo ""
+        echo "EU POP (localhost:8082):"
+        echo "" | nc -w 2 localhost 8082 | head -1
+
+  clean:
+    desc: Remove Docker images and volumes
+    cmds:
+      - docker compose down -v --rmi local

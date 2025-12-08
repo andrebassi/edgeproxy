@@ -19,18 +19,36 @@ edgeProxy maintains a binding table that maps client IPs to backend IDs. The fol
 | `EDGEPROXY_BINDING_TTL_SECS` | `600` | Binding lifetime (10 minutes) |
 | `EDGEPROXY_BINDING_GC_INTERVAL_SECS` | `60` | Cleanup interval |
 
+## Hexagonal Architecture
+
+Client affinity is managed through **ports and adapters**:
+
+```
+domain/entities.rs           → ClientKey, Binding (entities)
+domain/ports/binding_repository.rs → BindingRepository trait (port)
+adapters/outbound/dashmap_binding_repo.rs → DashMapBindingRepository (adapter)
+```
+
+The domain defines WHAT we need (the trait), the adapter provides HOW (DashMap).
+
 ## Data Structures
 
-### ClientKey
+### ClientKey (`domain/entities.rs`)
 
 ```rust
 #[derive(Clone, Debug, Eq, Hash, PartialEq)]
 pub struct ClientKey {
     pub client_ip: IpAddr,
 }
+
+impl ClientKey {
+    pub fn new(client_ip: IpAddr) -> Self {
+        Self { client_ip }
+    }
+}
 ```
 
-### Binding
+### Binding (`domain/entities.rs`)
 
 ```rust
 #[derive(Clone, Debug)]
@@ -39,39 +57,88 @@ pub struct Binding {
     pub created_at: Instant,
     pub last_seen: Instant,
 }
+
+impl Binding {
+    pub fn new(backend_id: String) -> Self {
+        let now = Instant::now();
+        Self { backend_id, created_at: now, last_seen: now }
+    }
+}
 ```
 
-### Storage
-
-Bindings are stored in a lock-free `DashMap`:
+### Port (Interface) - `domain/ports/binding_repository.rs`
 
 ```rust
-pub struct RcProxyState {
-    // ...
-    pub bindings: Arc<DashMap<ClientKey, Binding>>,
+#[async_trait]
+pub trait BindingRepository: Send + Sync {
+    async fn get(&self, key: &ClientKey) -> Option<Binding>;
+    async fn set(&self, key: ClientKey, binding: Binding);
+    async fn remove(&self, key: &ClientKey);
+    async fn touch(&self, key: &ClientKey);  // Update last_seen
+    async fn cleanup_expired(&self, ttl: Duration) -> usize;
+}
+```
+
+### Adapter (Implementation) - `adapters/outbound/dashmap_binding_repo.rs`
+
+```rust
+pub struct DashMapBindingRepository {
+    bindings: Arc<DashMap<ClientKey, Binding>>,
+}
+
+#[async_trait]
+impl BindingRepository for DashMapBindingRepository {
+    async fn get(&self, key: &ClientKey) -> Option<Binding> {
+        self.bindings.get(key).map(|e| e.value().clone())
+    }
+
+    async fn set(&self, key: ClientKey, binding: Binding) {
+        self.bindings.insert(key, binding);
+    }
+
+    async fn touch(&self, key: &ClientKey) {
+        if let Some(mut entry) = self.bindings.get_mut(key) {
+            entry.last_seen = Instant::now();
+        }
+    }
     // ...
 }
 ```
 
 ## Lifecycle
 
+All lifecycle operations go through the `ProxyService` (application layer), which uses the `BindingRepository` trait.
+
 ### 1. New Connection
 
 When a client connects for the first time:
 
 ```rust
-// No existing binding - use load balancer
-let backend = pick_backend(&backends, local_region, client_region);
+// application/proxy_service.rs
+pub async fn resolve_backend(&self, client_ip: IpAddr) -> Option<Backend> {
+    let client_key = ClientKey::new(client_ip);
 
-// Create new binding
-state.bindings.insert(
-    ClientKey { client_ip },
-    Binding {
-        backend_id: backend.id.clone(),
-        created_at: Instant::now(),
-        last_seen: Instant::now(),
-    },
-);
+    // 1. Check for existing binding via repository trait
+    if let Some(binding) = self.binding_repo.get(&client_key).await {
+        // ... use existing binding
+    }
+
+    // 2. No binding - use LoadBalancer (pure domain logic)
+    let backend = LoadBalancer::pick_backend(
+        &backends,
+        &self.local_region,
+        client_geo.as_ref(),
+        |id| self.metrics.get_connection_count(id),
+    )?;
+
+    // 3. Create new binding via repository trait
+    self.binding_repo.set(
+        client_key,
+        Binding::new(backend.id.clone()),
+    ).await;
+
+    Some(backend)
+}
 ```
 
 ### 2. Subsequent Connections
@@ -79,36 +146,42 @@ state.bindings.insert(
 When the same client reconnects:
 
 ```rust
-// Check for existing binding
-if let Some(mut entry) = state.bindings.get_mut(&client_key) {
-    // Update last_seen timestamp
-    entry.last_seen = Instant::now();
+// application/proxy_service.rs
+if let Some(binding) = self.binding_repo.get(&client_key).await {
+    // Update last_seen via repository
+    self.binding_repo.touch(&client_key).await;
 
-    // Use existing backend
-    chosen_backend_id = Some(entry.backend_id.clone());
+    // Verify backend is still healthy
+    if let Some(backend) = self.backend_repo.get_by_id(&binding.backend_id).await {
+        if backend.healthy {
+            return Some(backend);
+        }
+    }
+
+    // Backend unhealthy - remove stale binding
+    self.binding_repo.remove(&client_key).await;
 }
 ```
 
-### 3. Binding Expiration
+### 3. Binding Expiration (GC)
 
-Bindings expire after `BINDING_TTL_SECS` of inactivity:
+The adapter handles garbage collection:
 
 ```rust
-pub fn start_binding_gc(
-    bindings: Arc<DashMap<ClientKey, Binding>>,
-    ttl: Duration,
-    interval: Duration,
-) {
-    tokio::spawn(async move {
-        loop {
-            sleep(interval).await;
-
-            let now = Instant::now();
-            bindings.retain(|_, binding| {
-                now.duration_since(binding.last_seen) < ttl
-            });
-        }
-    });
+// adapters/outbound/dashmap_binding_repo.rs
+impl DashMapBindingRepository {
+    pub fn start_gc(&self, ttl: Duration, interval: Duration) {
+        let bindings = self.bindings.clone();
+        tokio::spawn(async move {
+            loop {
+                let now = Instant::now();
+                bindings.retain(|_, binding| {
+                    now.duration_since(binding.last_seen) <= ttl
+                });
+                tokio::time::sleep(interval).await;
+            }
+        });
+    }
 }
 ```
 
@@ -117,19 +190,18 @@ pub fn start_binding_gc(
 If the bound backend becomes unhealthy:
 
 ```rust
-// Lookup binding's backend
-let backend = rt.backends
-    .iter()
-    .find(|b| b.id == backend_id && b.healthy)
-    .cloned();
+// application/proxy_service.rs
+if let Some(binding) = self.binding_repo.get(&client_key).await {
+    // Check backend health via repository
+    if let Some(backend) = self.backend_repo.get_by_id(&binding.backend_id).await {
+        if backend.healthy {
+            return Some(backend);
+        }
+    }
 
-// If not found or unhealthy
-if backend.is_none() {
-    // Remove stale binding
-    state.bindings.remove(&client_key);
-
-    // Fall back to load balancer
-    return pick_backend(&backends, ...);
+    // Backend unhealthy or gone - remove binding
+    self.binding_repo.remove(&client_key).await;
+    // Fall through to LoadBalancer...
 }
 ```
 

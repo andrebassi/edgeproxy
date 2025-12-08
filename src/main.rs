@@ -1,21 +1,30 @@
-mod config;
-mod db;
-mod lb;
-mod model;
-mod proxy;
-mod state;
+//! edgeProxy - Distributed TCP Proxy with Hexagonal Architecture
+//!
+//! This is the composition root that wires together all the components.
 
+mod adapters;
+mod application;
+mod config;
+mod domain;
+
+use crate::adapters::inbound::TcpServer;
+use crate::adapters::outbound::{
+    DashMapBindingRepository, DashMapMetricsStore, MaxMindGeoResolver, SqliteBackendRepository,
+};
+use crate::application::ProxyService;
 use crate::config::load_config;
-use crate::db::start_routing_sync_sqlite;
-use crate::proxy::run_tcp_proxy;
-use crate::state::{GeoDb, RcProxyState, start_binding_gc};
+use crate::domain::ports::GeoResolver;
+use crate::domain::value_objects::RegionCode;
+use std::sync::Arc;
 use std::time::Duration;
 use tracing_subscriber::fmt::format::FmtSpan;
 
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
+    // Load configuration from environment
     let cfg = load_config()?;
 
+    // Setup logging
     let log_level = if cfg.debug {
         tracing::Level::DEBUG
     } else {
@@ -26,28 +35,45 @@ async fn main() -> anyhow::Result<()> {
         .with_max_level(log_level)
         .with_span_events(FmtSpan::CLOSE)
         .init();
+
     tracing::info!(
-        "starting edgeProxy region={} listen={}",
+        "starting edgeProxy region={} listen={} (hexagonal architecture)",
         cfg.region,
         cfg.listen_addr
     );
 
-    // Load GeoIP: prefer external file if specified, otherwise use embedded
-    let geo = match &cfg.geoip_path {
-        Some(path) => match GeoDb::open(path) {
-            Ok(db) => {
+    // ===== COMPOSITION ROOT =====
+    // Wire up all adapters and services
+
+    // 1. Create outbound adapters
+
+    // Backend repository (SQLite)
+    let backend_repo = Arc::new(SqliteBackendRepository::new());
+    backend_repo.start_sync(cfg.db_path.clone(), cfg.db_reload_secs);
+
+    // Binding repository (DashMap)
+    let binding_repo = Arc::new(DashMapBindingRepository::new());
+    binding_repo.start_gc(
+        Duration::from_secs(cfg.binding_ttl_secs),
+        Duration::from_secs(cfg.binding_gc_interval_secs),
+    );
+
+    // GeoIP resolver (MaxMind)
+    let geo_resolver: Option<Arc<dyn GeoResolver>> = match &cfg.geoip_path {
+        Some(path) => match MaxMindGeoResolver::from_file(path) {
+            Ok(g) => {
                 tracing::info!("GeoIP DB loaded from {}", path);
-                Some(db)
+                Some(Arc::new(g) as Arc<dyn GeoResolver>)
             }
             Err(e) => {
                 tracing::error!("failed to load GeoIP DB from {}: {:?}", path, e);
                 None
             }
         },
-        None => match GeoDb::embedded() {
-            Ok(db) => {
+        None => match MaxMindGeoResolver::embedded() {
+            Ok(g) => {
                 tracing::info!("GeoIP DB loaded (embedded)");
-                Some(db)
+                Some(Arc::new(g) as Arc<dyn GeoResolver>)
             }
             Err(e) => {
                 tracing::error!("failed to load embedded GeoIP DB: {:?}", e);
@@ -56,27 +82,20 @@ async fn main() -> anyhow::Result<()> {
         },
     };
 
-    let state = RcProxyState::new(cfg.region.clone(), geo);
+    // Metrics store (DashMap)
+    let metrics = Arc::new(DashMapMetricsStore::new());
 
-    // Sync routing.db (Corrosion cuida de replicar)
-    let routing = state.routing.clone();
-    let db_path = cfg.db_path.clone();
-    let interval = cfg.db_reload_secs;
-    tokio::spawn(async move {
-        if let Err(e) = start_routing_sync_sqlite(routing, db_path, interval).await {
-            tracing::error!("routing sync error: {:?}", e);
-        }
-    });
+    // 2. Create application service
+    let proxy_service = Arc::new(ProxyService::new(
+        backend_repo,
+        binding_repo,
+        geo_resolver.clone(),
+        metrics,
+        RegionCode::from_str(&cfg.region),
+    ));
 
-    // GC de bindings
-    start_binding_gc(
-        state.bindings.clone(),
-        Duration::from_secs(cfg.binding_ttl_secs),
-        Duration::from_secs(cfg.binding_gc_interval_secs),
-    );
+    // 3. Create inbound adapter and run
+    let server = TcpServer::new(proxy_service, cfg.listen_addr, geo_resolver);
 
-    // Proxy TCP
-    run_tcp_proxy(state, cfg.listen_addr.clone()).await?;
-
-    Ok(())
+    server.run().await
 }

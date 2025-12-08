@@ -1,0 +1,32 @@
+version: '3'
+
+tasks:
+  unit:
+    desc: Run all tests
+    cmds:
+      - cargo test
+
+  verbose:
+    desc: Run tests with verbose output
+    cmds:
+      - cargo test -- --nocapture
+
+  watch:
+    desc: Run tests on file change (requires cargo-watch)
+    cmds:
+      - cargo watch -x test
+
+  conn:
+    desc: Test TCP connection to local edgeProxy
+    cmds:
+      - nc -zv localhost 8080 || echo "edgeProxy not running on port 8080"
+
+  backends:
+    desc: Test connectivity to all backends
+    cmds:
+      - echo "Testing backend connectivity..."
+      - |
+        sqlite3 routing.db "SELECT wg_ip, port FROM backends WHERE healthy = 1" | while IFS='|' read ip port; do
+          echo -n "Testing $ip:$port... "
+          nc -zv -w 2 $ip $port 2>&1 | grep -q "succeeded" && echo "OK" || echo "FAIL"
+        done

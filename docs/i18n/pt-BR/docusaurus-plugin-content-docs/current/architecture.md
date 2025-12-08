@@ -23,6 +23,191 @@ O edgeProxy é projetado para deploys multi-região com rede mesh WireGuard e re
 
 ![Arquitetura Multi-Região](/img/multi-region.svg)
 
+## Arquitetura Hexagonal (Ports & Adapters)
+
+O edgeProxy usa **Arquitetura Hexagonal** para separar lógica de negócio de detalhes de infraestrutura.
+
+### Por que Hexagonal?
+
+1. **Testabilidade**: O algoritmo de load balancing é uma função pura - não depende de SQLite, DashMap ou qualquer infraestrutura. Pode ser testado unitariamente com dados mockados.
+
+2. **Flexibilidade**: Quer trocar SQLite por PostgreSQL? Basta criar um novo adapter que implemente `BackendRepository`. O domínio não muda.
+
+3. **Separação de Responsabilidades**:
+   - **Domain**: Regras de negócio puras (scoring, affinity logic)
+   - **Application**: Orquestração (coordena domain + adapters)
+   - **Adapters**: Detalhes de infraestrutura (SQLite, DashMap, MaxMind)
+
+4. **Inversão de Dependência**: O domínio define interfaces (ports/traits), adapters implementam. Domínio nunca importa código de infraestrutura.
+
+### Estrutura do Projeto
+
+```
+src/
+├── main.rs                 # Composition root
+├── config.rs               # Configuração do ambiente
+├── domain/                 # Lógica core (sem deps externas)
+│   ├── entities.rs         # Backend, Binding, ClientKey, GeoInfo
+│   ├── value_objects.rs    # RegionCode
+│   ├── ports/              # Interfaces (traits)
+│   │   ├── backend_repository.rs
+│   │   ├── binding_repository.rs
+│   │   ├── geo_resolver.rs
+│   │   └── metrics_store.rs
+│   └── services/
+│       └── load_balancer.rs  # Algoritmo de scoring (puro)
+├── application/            # Use cases / orquestração
+│   └── proxy_service.rs
+└── adapters/               # Implementações de infraestrutura
+    ├── inbound/
+    │   └── tcp_server.rs     # TCP listener
+    └── outbound/
+        ├── sqlite_backend_repo.rs    # BackendRepository impl
+        ├── dashmap_binding_repo.rs   # BindingRepository impl
+        ├── maxmind_geo_resolver.rs   # GeoResolver impl
+        └── dashmap_metrics_store.rs  # MetricsStore impl
+```
+
+### Diagrama de Camadas
+
+```
+┌─────────────────────────────────────────────────────────────────────┐
+│                        INBOUND ADAPTERS                             │
+│                      (driving adapters)                             │
+│  ┌─────────────────────────────────────────────────────────────┐   │
+│  │  tcp_server.rs - aceita conexões TCP, chama ProxyService    │   │
+│  └─────────────────────────────────────────────────────────────┘   │
+└─────────────────────────────────────────────────────────────────────┘
+                                  │
+                                  ▼
+┌─────────────────────────────────────────────────────────────────────┐
+│                         APPLICATION                                  │
+│                    (orquestração / use cases)                        │
+│  ┌─────────────────────────────────────────────────────────────┐   │
+│  │  ProxyService - resolve backend, gerencia bindings          │   │
+│  └─────────────────────────────────────────────────────────────┘   │
+└─────────────────────────────────────────────────────────────────────┘
+                                  │
+                                  ▼
+┌─────────────────────────────────────────────────────────────────────┐
+│                           DOMAIN                                     │
+│                (regras de negócio puras - ZERO deps externas)        │
+│  ┌──────────────┐  ┌──────────────┐  ┌──────────────────────────┐  │
+│  │  entities    │  │ value_objects│  │  services/LoadBalancer   │  │
+│  │  - Backend   │  │ - RegionCode │  │  - pick_backend()        │  │
+│  │  - Binding   │  │              │  │  - calculate_geo_score() │  │
+│  │  - ClientKey │  │              │  │                          │  │
+│  └──────────────┘  └──────────────┘  └──────────────────────────┘  │
+│                                                                      │
+│  ┌──────────────────────────────────────────────────────────────┐  │
+│  │  ports (traits) - interfaces que o domínio ESPERA            │  │
+│  │  - BackendRepository    - BindingRepository                  │  │
+│  │  - GeoResolver          - MetricsStore                       │  │
+│  └──────────────────────────────────────────────────────────────┘  │
+└─────────────────────────────────────────────────────────────────────┘
+                                  ▲
+                                  │ implementa
+┌─────────────────────────────────────────────────────────────────────┐
+│                       OUTBOUND ADAPTERS                              │
+│                   (infraestrutura / driven adapters)                 │
+│  ┌─────────────────┐  ┌─────────────────┐  ┌─────────────────────┐ │
+│  │ SqliteBackend   │  │ DashMapBinding  │  │ MaxMindGeoResolver  │ │
+│  │ Repository      │  │ Repository      │  │                     │ │
+│  └─────────────────┘  └─────────────────┘  └─────────────────────┘ │
+│  ┌─────────────────┐                                                │
+│  │ DashMapMetrics  │                                                │
+│  │ Store           │                                                │
+│  └─────────────────┘                                                │
+└─────────────────────────────────────────────────────────────────────┘
+```
+
+### Ports (Traits)
+
+Os **ports** são traits que definem o que o domínio precisa, sem saber COMO será implementado:
+
+```rust
+// domain/ports/backend_repository.rs
+#[async_trait]
+pub trait BackendRepository: Send + Sync {
+    async fn get_all(&self) -> Vec<Backend>;
+    async fn get_by_id(&self, id: &str) -> Option<Backend>;
+    async fn get_healthy(&self) -> Vec<Backend>;
+}
+
+// domain/ports/geo_resolver.rs
+pub trait GeoResolver: Send + Sync {
+    fn resolve(&self, ip: IpAddr) -> Option<GeoInfo>;
+}
+
+// domain/ports/metrics_store.rs
+pub trait MetricsStore: Send + Sync {
+    fn get_connection_count(&self, backend_id: &str) -> usize;
+    fn increment_connections(&self, backend_id: &str);
+    fn decrement_connections(&self, backend_id: &str);
+    fn record_rtt(&self, backend_id: &str, rtt_ms: u64);
+}
+```
+
+### Adapters (Implementações)
+
+Os **adapters** implementam os ports com tecnologias específicas:
+
+```rust
+// adapters/outbound/sqlite_backend_repo.rs
+#[async_trait]
+impl BackendRepository for SqliteBackendRepository {
+    async fn get_healthy(&self) -> Vec<Backend> {
+        self.backends.read().await
+            .iter()
+            .filter(|b| b.healthy)
+            .cloned()
+            .collect()
+    }
+}
+
+// adapters/outbound/maxmind_geo_resolver.rs
+impl GeoResolver for MaxMindGeoResolver {
+    fn resolve(&self, ip: IpAddr) -> Option<GeoInfo> {
+        let resp: CountryResp = self.reader.lookup(ip).ok()?;
+        let iso = resp.country?.iso_code?;
+        let region = RegionCode::from_country(&iso);
+        Some(GeoInfo::new(iso, region))
+    }
+}
+```
+
+### Composition Root (main.rs)
+
+O `main.rs` é o único lugar que conhece TODAS as implementações concretas:
+
+```rust
+// main.rs - Composition Root
+let backend_repo = Arc::new(SqliteBackendRepository::new());
+let binding_repo = Arc::new(DashMapBindingRepository::new());
+let geo_resolver = Arc::new(MaxMindGeoResolver::embedded()?);
+let metrics = Arc::new(DashMapMetricsStore::new());
+
+let proxy_service = Arc::new(ProxyService::new(
+    backend_repo,    // trait BackendRepository
+    binding_repo,    // trait BindingRepository
+    geo_resolver,    // trait GeoResolver
+    metrics,         // trait MetricsStore
+    RegionCode::from_str(&cfg.region),
+));
+
+let server = TcpServer::new(proxy_service, cfg.listen_addr);
+server.run().await
+```
+
+### Benefícios Práticos
+
+| Cenário | Sem Hexagonal | Com Hexagonal |
+|---------|---------------|---------------|
+| Testar LoadBalancer | Precisa de SQLite rodando | Mock simples do trait |
+| Trocar SQLite→Postgres | Refatorar todo o código | Criar novo adapter |
+| Adicionar Redis cache | Modificar state.rs | Criar adapter que implementa port |
+| Entender o domínio | Ler código misturado | Olhar só `domain/` |
+
 ## Componentes Core
 
 ### 1. Configuração (`config.rs`)
@@ -42,7 +227,7 @@ pub struct Config {
 }
 ```
 
-### 2. Banco de Roteamento (`db.rs`)
+### 2. Banco de Roteamento (`adapters/outbound/sqlite_backend_repo.rs`)
 
 Banco SQLite contendo definições de backends:
 
@@ -51,6 +236,7 @@ CREATE TABLE backends (
     id TEXT PRIMARY KEY,      -- Identificador único do backend
     app TEXT,                 -- Nome da aplicação
     region TEXT,              -- Região geográfica (sa, us, eu)
+    country TEXT,             -- Código do país (BR, US, FR)
     wg_ip TEXT,               -- IP do overlay WireGuard
     port INTEGER,             -- Porta do backend
     healthy INTEGER,          -- Status de saúde (0/1)
@@ -61,143 +247,104 @@ CREATE TABLE backends (
 );
 ```
 
-O banco é recarregado periodicamente (padrão: 5 segundos) para pegar mudanças sem reiniciar:
+O banco é recarregado periodicamente (padrão: 5 segundos) via task Tokio em background:
 
 ```rust
-pub async fn start_routing_sync_sqlite(
-    routing: Arc<RwLock<RoutingState>>,
-    db_path: String,
-    interval_secs: u64,
-) -> Result<()> {
-    loop {
-        // Carregar backends do SQLite
-        let new_state = load_routing_state_from_sqlite(&db_path)?;
-
-        // Update atômico
-        let mut guard = routing.write().await;
-        *guard = new_state;
-
-        sleep(Duration::from_secs(interval_secs)).await;
+impl SqliteBackendRepository {
+    pub fn start_sync(&self, db_path: String, interval_secs: u64) {
+        let backends = self.backends.clone();
+        tokio::spawn(async move {
+            loop {
+                let new_backends = Self::load_from_sqlite(&db_path)?;
+                *backends.write().await = new_backends;
+                sleep(Duration::from_secs(interval_secs)).await;
+            }
+        });
     }
 }
 ```
 
-### 3. Load Balancer (`lb.rs`)
+### 3. Load Balancer (`domain/services/load_balancer.rs`)
 
-O load balancer usa um sistema de pontuação para selecionar o backend otimal:
+Função pura SEM dependências externas. Recebe uma closure para obter contagem de conexões:
+
+```rust
+impl LoadBalancer {
+    pub fn pick_backend<F>(
+        backends: &[Backend],
+        local_region: &RegionCode,
+        client_geo: Option<&GeoInfo>,
+        get_conn_count: F,  // Closure injetada - não conhece DashMap
+    ) -> Option<Backend>
+    where
+        F: Fn(&str) -> usize,
+    {
+        // Algoritmo de scoring puro
+        // geo_score * 100 + (load_factor / weight)
+    }
+}
+```
+
+**Scoring:**
 
 ```
-score = region_score * 100 + (load_factor / weight)
+score = geo_score * 100 + (load_factor / weight)
 
 onde:
-  region_score = 0 (região do cliente = região do backend)
-               = 1 (região do POP local)
-               = 2 (fallback/outras regiões)
+  geo_score = 0 (mesmo país do cliente - melhor)
+            = 1 (mesma região do cliente)
+            = 2 (mesma região do POP local)
+            = 3 (fallback - cross region)
 
   load_factor = conexões_atuais / soft_limit
-
-  weight = peso configurado do backend (maior = mais preferido)
+  weight = peso do backend (maior = mais preferido)
 ```
 
-**Algoritmo:**
+### 4. Serviço de Aplicação (`application/proxy_service.rs`)
 
-1. Filtrar backends: `healthy = true` E `conexões < hard_limit`
-2. Calcular score para cada backend
-3. Selecionar backend com menor score
-
-### 4. Estado Compartilhado (`state.rs`)
-
-Estado global compartilhado entre todas as conexões:
+Orquestra a lógica de domínio e coordena adapters:
 
 ```rust
-pub struct RcProxyState {
-    pub local_region: String,
-    pub routing: Arc<RwLock<RoutingState>>,
-    pub bindings: Arc<DashMap<ClientKey, Binding>>,
-    pub metrics: Arc<DashMap<String, BackendMetrics>>,
-    pub geo: Option<GeoDb>,
+pub struct ProxyService {
+    backend_repo: Arc<dyn BackendRepository>,
+    binding_repo: Arc<dyn BindingRepository>,
+    geo_resolver: Option<Arc<dyn GeoResolver>>,
+    metrics: Arc<dyn MetricsStore>,
+    local_region: RegionCode,
 }
-```
 
-**Estruturas chave:**
-
-- `RoutingState`: Lista atual de backends (atualizada periodicamente)
-- `DashMap<ClientKey, Binding>`: Mapa de afinidade lock-free
-- `DashMap<String, BackendMetrics>`: Contagem de conexões e RTT por backend
-
-### 5. Resolução GeoIP (`state.rs`)
-
-Mapeia IPs de cliente para regiões usando MaxMind GeoLite2:
-
-```rust
-impl GeoDb {
-    pub fn region_for_ip(&self, ip: IpAddr) -> Option<String> {
-        let country: geoip2::Country = self.reader.lookup(ip).ok()?;
-        let iso_code = country.country?.iso_code?;
-
-        // Mapear país para região
-        match iso_code {
-            "BR" | "AR" | "CL" | "PE" | "CO" => Some("sa".to_string()),
-            "US" | "CA" | "MX" => Some("us".to_string()),
-            "PT" | "ES" | "FR" | "DE" | "GB" => Some("eu".to_string()),
-            _ => Some("us".to_string()), // Fallback padrão
-        }
+impl ProxyService {
+    pub async fn resolve_backend(&self, client_ip: IpAddr) -> Option<Backend> {
+        // 1. Verificar binding existente
+        // 2. Resolver geo do cliente
+        // 3. Chamar LoadBalancer com closure de métricas injetada
+        // 4. Criar novo binding
     }
 }
 ```
 
-### 6. Proxy TCP (`proxy.rs`)
+### 5. Servidor TCP (`adapters/inbound/tcp_server.rs`)
 
-A lógica core do proxy lida com streaming TCP bidirecional:
+Adapter inbound que aceita conexões e chama o serviço de aplicação:
 
 ```rust
-async fn handle_connection(
-    state: RcProxyState,
-    client_stream: TcpStream,
-    client_addr: SocketAddr,
-) -> Result<()> {
-    // 1. Verificar binding existente (afinidade)
-    let client_key = ClientKey { client_ip: client_addr.ip() };
+impl TcpServer {
+    pub async fn run(&self) -> anyhow::Result<()> {
+        let listener = TcpListener::bind(&self.listen_addr).await?;
 
-    // 2. Resolver backend
-    let backend = if let Some(binding) = state.bindings.get(&client_key) {
-        // Usar binding existente
-        find_backend_by_id(&binding.backend_id)
-    } else {
-        // Escolher novo backend usando load balancer
-        let client_region = state.geo.as_ref()
-            .and_then(|g| g.region_for_ip(client_addr.ip()));
-        pick_backend(&backends, &state.local_region, client_region.as_deref())
-    };
+        loop {
+            let (stream, addr) = listener.accept().await?;
+            let service = self.proxy_service.clone();
 
-    // 3. Conectar ao backend
-    let backend_stream = TcpStream::connect(&backend_addr).await?;
+            tokio::spawn(async move {
+                // Resolver backend via ProxyService
+                let backend = service.resolve_backend(addr.ip()).await?;
 
-    // 4. Atualizar métricas
-    state.metrics.entry(backend.id.clone())
-        .or_insert_with(BackendMetrics::new)
-        .current_conns.fetch_add(1, Ordering::Relaxed);
-
-    // 5. Cópia bidirecional com half-close adequado
-    let (client_read, client_write) = client_stream.into_split();
-    let (backend_read, backend_write) = backend_stream.into_split();
-
-    let c2b = tokio::spawn(async move {
-        io::copy(&mut client_read, &mut backend_write).await?;
-        backend_write.shutdown().await
-    });
-
-    let b2c = tokio::spawn(async move {
-        io::copy(&mut backend_read, &mut client_write).await
-    });
-
-    tokio::join!(c2b, b2c);
-
-    // 6. Limpar métricas
-    state.metrics.get(&backend.id)
-        .map(|m| m.current_conns.fetch_sub(1, Ordering::Relaxed));
-
-    Ok(())
+                // Conectar ao backend, registrar métricas
+                // Cópia TCP bidirecional
+            });
+        }
+    }
 }
 ```
 
@@ -206,6 +353,19 @@ async fn handle_connection(
 O fluxo de requisição mostra o ciclo de vida completo de uma conexão TCP através do edgeProxy:
 
 ![Request Flow](/img/request-flow.svg)
+
+```
+1. Conexão TCP do cliente chega no TcpServer (inbound adapter)
+2. TcpServer chama ProxyService.resolve_backend()
+3. ProxyService verifica BindingRepository para binding existente
+4. Se não há binding: ProxyService resolve geo via GeoResolver
+5. ProxyService chama LoadBalancer.pick_backend() com closure de métricas
+6. LoadBalancer retorna melhor backend (lógica de domínio pura)
+7. ProxyService cria binding via BindingRepository
+8. TcpServer conecta ao backend, registra métricas via MetricsStore
+9. Cópia TCP bidirecional (L4 passthrough)
+10. Na desconexão: TcpServer decrementa contagem de conexões
+```
 
 ## Decisões de Design
 
@@ -234,6 +394,13 @@ O fluxo de requisição mostra o ciclo de vida completo de uma conexão TCP atra
 - **Performance**: Criptografia a nível de kernel com overhead mínimo
 - **Simplicidade**: Configuração point-to-point
 
+### Por que Arquitetura Hexagonal?
+
+- **Testabilidade**: Lógica de domínio pode ser testada sem infraestrutura
+- **Flexibilidade**: Fácil trocar implementações (SQLite→PostgreSQL)
+- **Manutenibilidade**: Clara separação de responsabilidades
+- **Onboarding**: Novos devs podem entender o domínio lendo só `domain/`
+
 ## Considerações de Performance
 
 ### Tratamento de Conexões
@@ -252,6 +419,35 @@ O fluxo de requisição mostra o ciclo de vida completo de uma conexão TCP atra
 
 - Horizontal: Deploy de múltiplas instâncias edgeProxy atrás de DNS/Anycast
 - Vertical: Tokio escala automaticamente para os cores de CPU disponíveis
+
+## Adicionando Novos Adapters
+
+Para adicionar um novo adapter (ex: PostgreSQL para backends):
+
+1. Criar `adapters/outbound/postgres_backend_repo.rs`
+2. Implementar trait `BackendRepository`
+3. Atualizar composition root no `main.rs`
+
+```rust
+// adapters/outbound/postgres_backend_repo.rs
+pub struct PostgresBackendRepository {
+    pool: PgPool,
+}
+
+#[async_trait]
+impl BackendRepository for PostgresBackendRepository {
+    async fn get_healthy(&self) -> Vec<Backend> {
+        sqlx::query_as!(Backend, "SELECT * FROM backends WHERE healthy = true")
+            .fetch_all(&self.pool)
+            .await
+            .unwrap_or_default()
+    }
+}
+
+// main.rs - só muda a composição
+let backend_repo = Arc::new(PostgresBackendRepository::new(pool));
+// resto do código permanece igual!
+```
 
 ## Próximos Passos
 

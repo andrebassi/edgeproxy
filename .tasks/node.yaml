@@ -1,0 +1,118 @@
+version: '3'
+
+tasks:
+  add:
+    desc: "Add a new node. Usage: task node:add -- ID REGION WG_IP [PORT] [WEIGHT]"
+    cmds:
+      - |
+        if [ -z "{{.CLI_ARGS}}" ]; then
+          echo "Usage: task node:add -- <id> <region> <wg_ip> [port] [weight]"
+          echo ""
+          echo "Examples:"
+          echo "  task node:add -- sa-node-2 sa 10.50.1.2"
+          echo "  task node:add -- us-node-2 us 10.50.2.2 8080"
+          echo "  task node:add -- eu-node-2 eu 10.50.3.2 8080 2"
+          exit 1
+        fi
+
+        ID=$(echo "{{.CLI_ARGS}}" | awk '{print $1}')
+        REGION=$(echo "{{.CLI_ARGS}}" | awk '{print $2}')
+        WG_IP=$(echo "{{.CLI_ARGS}}" | awk '{print $3}')
+        PORT=$(echo "{{.CLI_ARGS}}" | awk '{print $4}')
+        WEIGHT=$(echo "{{.CLI_ARGS}}" | awk '{print $5}')
+
+        PORT=${PORT:-8080}
+        WEIGHT=${WEIGHT:-1}
+
+        sqlite3 routing.db "INSERT INTO backends (id, app, region, wg_ip, port, healthy, weight, soft_limit, hard_limit) VALUES ('$ID', 'myapp', '$REGION', '$WG_IP', $PORT, 1, $WEIGHT, 100, 200)"
+        echo "Node added: $ID (region=$REGION, wg_ip=$WG_IP, port=$PORT, weight=$WEIGHT)"
+        task db:show
+
+  remove:
+    desc: "Remove a node (soft delete). Usage: task node:remove -- ID"
+    cmds:
+      - |
+        if [ -z "{{.CLI_ARGS}}" ]; then
+          echo "Usage: task node:remove -- <id>"
+          echo "Example: task node:remove -- sa-node-2"
+          exit 1
+        fi
+
+        ID="{{.CLI_ARGS}}"
+        sqlite3 routing.db "UPDATE backends SET deleted = 1 WHERE id = '$ID'"
+        echo "Node removed (soft delete): $ID"
+        task db:show
+
+  delete:
+    desc: "Permanently delete a node. Usage: task node:delete -- ID"
+    cmds:
+      - |
+        if [ -z "{{.CLI_ARGS}}" ]; then
+          echo "Usage: task node:delete -- <id>"
+          echo "Example: task node:delete -- sa-node-2"
+          exit 1
+        fi
+
+        ID="{{.CLI_ARGS}}"
+        sqlite3 routing.db "DELETE FROM backends WHERE id = '$ID'"
+        echo "Node permanently deleted: $ID"
+        task db:show
+
+  enable:
+    desc: "Enable a node (set healthy=1). Usage: task node:enable -- ID"
+    cmds:
+      - |
+        if [ -z "{{.CLI_ARGS}}" ]; then
+          echo "Usage: task node:enable -- <id>"
+          exit 1
+        fi
+
+        ID="{{.CLI_ARGS}}"
+        sqlite3 routing.db "UPDATE backends SET healthy = 1, deleted = 0 WHERE id = '$ID'"
+        echo "Node enabled: $ID"
+
+  disable:
+    desc: "Disable a node (set healthy=0). Usage: task node:disable -- ID"
+    cmds:
+      - |
+        if [ -z "{{.CLI_ARGS}}" ]; then
+          echo "Usage: task node:disable -- <id>"
+          exit 1
+        fi
+
+        ID="{{.CLI_ARGS}}"
+        sqlite3 routing.db "UPDATE backends SET healthy = 0 WHERE id = '$ID'"
+        echo "Node disabled: $ID"
+
+  weight:
+    desc: "Set node weight. Usage: task node:weight -- ID WEIGHT"
+    cmds:
+      - |
+        if [ -z "{{.CLI_ARGS}}" ]; then
+          echo "Usage: task node:weight -- <id> <weight>"
+          echo "Example: task node:weight -- sa-node-1 3"
+          exit 1
+        fi
+
+        ID=$(echo "{{.CLI_ARGS}}" | awk '{print $1}')
+        WEIGHT=$(echo "{{.CLI_ARGS}}" | awk '{print $2}')
+
+        sqlite3 routing.db "UPDATE backends SET weight = $WEIGHT WHERE id = '$ID'"
+        echo "Node weight updated: $ID -> $WEIGHT"
+
+  limits:
+    desc: "Set node connection limits. Usage: task node:limits -- ID SOFT_LIMIT HARD_LIMIT"
+    cmds:
+      - |
+        if [ -z "{{.CLI_ARGS}}" ]; then
+          echo "Usage: task node:limits -- <id> <soft_limit> <hard_limit>"
+          echo "Example: task node:limits -- sa-node-1 50 100"
+          exit 1
+        fi
+
+        ID=$(echo "{{.CLI_ARGS}}" | awk '{print $1}')
+        SOFT=$(echo "{{.CLI_ARGS}}" | awk '{print $2}')
+        HARD=$(echo "{{.CLI_ARGS}}" | awk '{print $3}')
+
+        sqlite3 routing.db "UPDATE backends SET soft_limit = $SOFT, hard_limit = $HARD WHERE id = '$ID'"
+        echo "Node limits updated: $ID -> soft=$SOFT, hard=$HARD"

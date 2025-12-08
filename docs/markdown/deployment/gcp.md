@@ -112,8 +112,6 @@ tasks:
 ### Step-by-Step Creation
 
 ```bash
-cd fly-backend
-
 # 1. Verify GCP credentials
 task gcp:check
 

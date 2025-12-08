@@ -1,0 +1,54 @@
+version: '3'
+
+tasks:
+  wg-up:
+    desc: Connect to Fly.io WireGuard network
+    cmds:
+      - sudo wg-quick up ./wireguard/fly.conf
+      - echo "WireGuard tunnel UP - connected to Fly.io network"
+
+  wg-down:
+    desc: Disconnect from Fly.io WireGuard network
+    cmds:
+      - sudo wg-quick down ./wireguard/fly.conf
+      - echo "WireGuard tunnel DOWN"
+
+  wg-status:
+    desc: Show WireGuard tunnel status
+    cmds:
+      - sudo wg show || echo "WireGuard tunnel not active"
+
+  backends:
+    desc: Load Fly.io backends into routing.db
+    cmds:
+      - sqlite3 routing.db < sql/fly_backends.sql
+      - task db:show
+
+  test:
+    desc: Test connectivity to all Fly.io backends
+    cmds:
+      - |
+        echo "Testing Fly.io backends via WireGuard..."
+        echo ""
+        sqlite3 routing.db "SELECT id, wg_ip FROM backends" | while IFS='|' read id ip; do
+          echo -n "Testing $id ($ip)... "
+          timeout 5 nc -6zv $ip 8080 2>&1 | grep -q "succeeded\|Connected" && echo "OK" || echo "FAIL"
+        done
+
+  test-region:
+    desc: "Test a specific region backend. Usage: task fly:test-region -- gru"
+    cmds:
+      - |
+        if [ -z "{{.CLI_ARGS}}" ]; then
+          echo "Usage: task fly:test-region -- <region>"
+          echo "Regions: gru, iad, ord, lax, lhr, fra, cdg, nrt, sin, syd"
+          exit 1
+        fi
+        REGION="{{.CLI_ARGS}}"
+        IP=$(sqlite3 routing.db "SELECT wg_ip FROM backends WHERE id LIKE 'fly-$REGION%' LIMIT 1")
+        if [ -z "$IP" ]; then
+          echo "Region $REGION not found"
+          exit 1
+        fi
+        echo "Connecting to $REGION ($IP)..."
+        echo "lang=en" | timeout 5 nc -6 $IP 8080 2>&1
