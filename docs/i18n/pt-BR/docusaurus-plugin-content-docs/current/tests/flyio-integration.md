@@ -6,9 +6,6 @@ sidebar_position: 1
 
 Resultados dos testes para edgeProxy v0.4.0 integração com backends Fly.io multi-região via VPN WireGuard.
 
-**Data do Teste**: 2025-12-08
-**Ambiente**: EC2 Hub (Irlanda) + 10 POPs Fly.io
-
 ## Ambiente de Teste
 
 ### EC2 Hub (Irlanda)
