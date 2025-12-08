@@ -113,6 +113,7 @@ impl BindingRepository for DashMapBindingRepository {
 }
 
 #[cfg(test)]
+#[cfg_attr(coverage_nightly, coverage(off))]
 mod tests {
     use super::*;
     use std::net::{IpAddr, Ipv4Addr, Ipv6Addr};
@@ -358,5 +359,107 @@ mod tests {
         assert_eq!(repo.get(&key1).await.unwrap().backend_id, "backend-1");
         assert_eq!(repo.get(&key2).await.unwrap().backend_id, "backend-2");
         assert_eq!(repo.get(&key3).await.unwrap().backend_id, "backend-1");
+    }
+
+    // ===== Integration Tests for start_gc =====
+
+    #[tokio::test]
+    async fn test_start_gc_removes_expired_bindings() {
+        let repo = DashMapBindingRepository::new();
+
+        // Add an old binding that should be expired
+        let key = ClientKey::new(IpAddr::V4(Ipv4Addr::new(192, 168, 1, 1)));
+        let mut binding = Binding::new("backend-1".to_string());
+        binding.last_seen = Instant::now() - Duration::from_millis(200);
+        repo.set(key.clone(), binding).await;
+
+        // Verify binding exists before GC
+        assert!(repo.get(&key).await.is_some());
+
+        // Start GC with 100ms TTL and 50ms interval
+        repo.start_gc(Duration::from_millis(100), Duration::from_millis(50));
+
+        // Wait for GC to run (wait slightly more than interval)
+        tokio::time::sleep(Duration::from_millis(80)).await;
+
+        // Binding should be removed
+        assert!(repo.get(&key).await.is_none());
+    }
+
+    #[tokio::test]
+    async fn test_start_gc_keeps_fresh_bindings() {
+        let repo = DashMapBindingRepository::new();
+
+        // Add a fresh binding
+        let key = ClientKey::new(IpAddr::V4(Ipv4Addr::new(192, 168, 1, 2)));
+        let binding = Binding::new("backend-2".to_string());
+        repo.set(key.clone(), binding).await;
+
+        // Start GC with 10 second TTL (much longer than test duration)
+        repo.start_gc(Duration::from_secs(10), Duration::from_millis(50));
+
+        // Wait for GC to potentially run
+        tokio::time::sleep(Duration::from_millis(80)).await;
+
+        // Fresh binding should still exist
+        assert!(repo.get(&key).await.is_some());
+    }
+
+    #[tokio::test]
+    async fn test_start_gc_multiple_iterations() {
+        let repo = DashMapBindingRepository::new();
+
+        // Add first expired binding
+        let key1 = ClientKey::new(IpAddr::V4(Ipv4Addr::new(192, 168, 1, 1)));
+        let mut binding1 = Binding::new("backend-1".to_string());
+        binding1.last_seen = Instant::now() - Duration::from_millis(200);
+        repo.set(key1.clone(), binding1).await;
+
+        // Start GC with 100ms TTL and 30ms interval
+        repo.start_gc(Duration::from_millis(100), Duration::from_millis(30));
+
+        // Wait for first GC cycle
+        tokio::time::sleep(Duration::from_millis(50)).await;
+
+        // First binding should be gone
+        assert!(repo.get(&key1).await.is_none());
+
+        // Add second expired binding
+        let key2 = ClientKey::new(IpAddr::V4(Ipv4Addr::new(192, 168, 1, 2)));
+        let mut binding2 = Binding::new("backend-2".to_string());
+        binding2.last_seen = Instant::now() - Duration::from_millis(200);
+        repo.set(key2.clone(), binding2).await;
+
+        // Wait for next GC cycle
+        tokio::time::sleep(Duration::from_millis(50)).await;
+
+        // Second binding should also be gone
+        assert!(repo.get(&key2).await.is_none());
+    }
+
+    #[tokio::test]
+    async fn test_start_gc_mixed_expiry() {
+        let repo = DashMapBindingRepository::new();
+
+        // Add expired binding
+        let key1 = ClientKey::new(IpAddr::V4(Ipv4Addr::new(192, 168, 1, 1)));
+        let mut old_binding = Binding::new("old-backend".to_string());
+        old_binding.last_seen = Instant::now() - Duration::from_millis(200);
+        repo.set(key1.clone(), old_binding).await;
+
+        // Add fresh binding
+        let key2 = ClientKey::new(IpAddr::V4(Ipv4Addr::new(192, 168, 1, 2)));
+        let fresh_binding = Binding::new("fresh-backend".to_string());
+        repo.set(key2.clone(), fresh_binding).await;
+
+        // Start GC
+        repo.start_gc(Duration::from_millis(100), Duration::from_millis(50));
+
+        // Wait for GC
+        tokio::time::sleep(Duration::from_millis(80)).await;
+
+        // Old should be gone, fresh should remain
+        assert!(repo.get(&key1).await.is_none());
+        assert!(repo.get(&key2).await.is_some());
     }
 }

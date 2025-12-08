@@ -1,15 +1,15 @@
 ---
-sidebar_position: 6
+sidebar_position: 3
 ---
 
-# Fase 6: Health Checks Ativos
+# Fase 3: Health Checks Ativos
 
 **Objetivo**: Monitoramento proativo de saúde ao invés de detecção reativa de falhas.
 
 ## Estado Atual (Passivo)
 
 ```rust
-// Só detecta falha quando conexão falha
+// Detecta falha apenas quando conexão falha
 match TcpStream::connect(backend).await {
     Ok(stream) => use_backend(stream),
     Err(_) => mark_unhealthy(backend), // Tarde demais!
@@ -19,7 +19,7 @@ match TcpStream::connect(backend).await {
 ## Estado Alvo (Ativo + Passivo)
 
 ```rust
-// Health checker em background
+// Verificador de saúde em background
 async fn health_checker(backends: Vec<Backend>) {
     loop {
         for backend in &backends {
@@ -57,12 +57,12 @@ async fn check_health(backend: &Backend) -> HealthStatus {
 
 ## Benefícios
 
-- **Detecção proativa**: Sabe antes dos usuários reclamarem
-- **Degradação gradual**: Soft limit antes de hard failure
-- **Roteamento baseado em RTT**: Roteia para backend mais rápido
-- **Integração com alertas**: Notifica em mudanças de saúde
+- **Detecção proativa**: Saber antes dos usuários reclamarem
+- **Degradação gradual**: Soft limit antes de falha hard
+- **Roteamento baseado em RTT**: Rotear para backend mais rápido
+- **Integração com alertas**: Notificar em mudanças de saúde
 
 ## Relacionado
 
 - [Visão Geral do Roadmap](../roadmap/)
-- [Fase 5: Anycast BGP](./phase-5-anycast-bgp)
+- [Fase 2: Anycast BGP](./phase-2-anycast-bgp)

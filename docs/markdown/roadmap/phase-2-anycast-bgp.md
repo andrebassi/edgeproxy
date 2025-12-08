@@ -1,8 +1,8 @@
 ---
-sidebar_position: 5
+sidebar_position: 2
 ---
 
-# Phase 5: Anycast BGP
+# Phase 2: Anycast BGP
 
 **Goal**: Replace GeoDNS with BGP Anycast for instant failover and optimal routing.
 
@@ -67,5 +67,5 @@ protocol static {
 ## Related
 
 - [Roadmap Overview](../roadmap/)
-- [Phase 4: IPv6 Private Network](./phase-4-ipv6)
-- [Phase 6: Active Health Checks](./phase-6-health-checks)
+- [Phase 1: IPv6 Private Network](./phase-1-ipv6)
+- [Phase 3: Active Health Checks](./phase-3-health-checks)

@@ -9,11 +9,12 @@ use serde::{Deserialize, Serialize};
 ///
 /// Regions are used to group backends and clients for geo-aware routing.
 /// Clients are preferentially routed to backends in the same region.
-#[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize, Default)]
 pub enum RegionCode {
     /// South America (sa) - Brazil, Argentina, Chile, etc.
     SouthAmerica,
     /// North America (us) - USA, Canada, Mexico
+    #[default]
     NorthAmerica,
     /// Europe (eu) - Western and Central Europe
     Europe,
@@ -51,6 +52,16 @@ impl RegionCode {
         }
     }
 
+    /// Get a default representative country for this region.
+    pub fn default_country(&self) -> &'static str {
+        match self {
+            Self::SouthAmerica => "BR",
+            Self::NorthAmerica => "US",
+            Self::Europe => "DE",
+            Self::AsiaPacific => "JP",
+        }
+    }
+
     /// Map a country code (ISO 3166-1 alpha-2) to a region.
     pub fn from_country(country: &str) -> Self {
         match country.to_uppercase().as_str() {
@@ -69,12 +80,6 @@ impl RegionCode {
             // Fallback to US for unknown countries
             _ => Self::NorthAmerica,
         }
-    }
-}
-
-impl Default for RegionCode {
-    fn default() -> Self {
-        Self::NorthAmerica
     }
 }
 
@@ -107,6 +112,7 @@ impl BackendScore {
 }
 
 #[cfg(test)]
+#[cfg_attr(coverage_nightly, coverage(off))]
 mod tests {
     use super::*;
 
@@ -300,6 +306,16 @@ mod tests {
         assert_ne!(RegionCode::SouthAmerica, RegionCode::NorthAmerica);
     }
 
+    // ===== RegionCode::default_country Tests =====
+
+    #[test]
+    fn test_region_default_country() {
+        assert_eq!(RegionCode::SouthAmerica.default_country(), "BR");
+        assert_eq!(RegionCode::NorthAmerica.default_country(), "US");
+        assert_eq!(RegionCode::Europe.default_country(), "DE");
+        assert_eq!(RegionCode::AsiaPacific.default_country(), "JP");
+    }
+
     // ===== BackendScore Tests =====
 
     #[test]
@@ -319,6 +335,47 @@ mod tests {
         assert!((score.score - cloned.score).abs() < f64::EPSILON);
     }
 
+    // ===== RegionCode Hash Tests =====
+
+    #[test]
+    fn test_region_hash() {
+        use std::collections::HashSet;
+
+        let mut set = HashSet::new();
+        set.insert(RegionCode::SouthAmerica);
+        set.insert(RegionCode::NorthAmerica);
+        set.insert(RegionCode::Europe);
+        set.insert(RegionCode::AsiaPacific);
+
+        assert_eq!(set.len(), 4);
+        assert!(set.contains(&RegionCode::SouthAmerica));
+        assert!(set.contains(&RegionCode::NorthAmerica));
+        assert!(set.contains(&RegionCode::Europe));
+        assert!(set.contains(&RegionCode::AsiaPacific));
+    }
+
+    #[test]
+    fn test_region_duplicate_hash() {
+        use std::collections::HashSet;
+
+        let mut set = HashSet::new();
+        set.insert(RegionCode::Europe);
+        set.insert(RegionCode::Europe); // duplicate
+
+        assert_eq!(set.len(), 1);
+    }
+
+    // ===== BackendScore Debug Tests =====
+
+    #[test]
+    fn test_backend_score_debug() {
+        let score = BackendScore::new("test-backend".to_string(), 42.5);
+        let debug_str = format!("{:?}", score);
+
+        assert!(debug_str.contains("test-backend"));
+        assert!(debug_str.contains("42.5"));
+    }
+
     // ===== Roundtrip Tests =====
 
     #[test]
@@ -335,5 +392,52 @@ mod tests {
             let parsed = RegionCode::from_str(str_repr);
             assert_eq!(region, parsed);
         }
+    }
+
+    // ===== Serde Serialization Tests =====
+
+    #[test]
+    fn test_region_serialize_deserialize() {
+        use serde_json;
+
+        let region = RegionCode::Europe;
+        let json = serde_json::to_string(&region).unwrap();
+        let deserialized: RegionCode = serde_json::from_str(&json).unwrap();
+        assert_eq!(region, deserialized);
+    }
+
+    #[test]
+    fn test_region_serialize_all_variants() {
+        use serde_json;
+
+        let regions = vec![
+            RegionCode::SouthAmerica,
+            RegionCode::NorthAmerica,
+            RegionCode::Europe,
+            RegionCode::AsiaPacific,
+        ];
+
+        for region in regions {
+            let json = serde_json::to_string(&region).unwrap();
+            let deserialized: RegionCode = serde_json::from_str(&json).unwrap();
+            assert_eq!(region, deserialized);
+        }
+    }
+
+    // ===== RegionCode Debug Tests =====
+
+    #[test]
+    fn test_region_debug() {
+        let region = RegionCode::SouthAmerica;
+        let debug_str = format!("{:?}", region);
+        assert_eq!(debug_str, "SouthAmerica");
+    }
+
+    #[test]
+    fn test_region_debug_all_variants() {
+        assert_eq!(format!("{:?}", RegionCode::SouthAmerica), "SouthAmerica");
+        assert_eq!(format!("{:?}", RegionCode::NorthAmerica), "NorthAmerica");
+        assert_eq!(format!("{:?}", RegionCode::Europe), "Europe");
+        assert_eq!(format!("{:?}", RegionCode::AsiaPacific), "AsiaPacific");
     }
 }

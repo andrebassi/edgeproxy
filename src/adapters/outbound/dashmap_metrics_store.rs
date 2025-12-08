@@ -81,7 +81,7 @@ impl MetricsStore for DashMapMetricsStore {
     fn increment_connections(&self, backend_id: &str) {
         self.metrics
             .entry(backend_id.to_string())
-            .or_insert_with(BackendMetrics::new)
+            .or_default()
             .current_conns
             .fetch_add(1, Ordering::Relaxed);
     }
@@ -107,7 +107,7 @@ impl MetricsStore for DashMapMetricsStore {
     fn record_rtt(&self, backend_id: &str, rtt_ms: u64) {
         self.metrics
             .entry(backend_id.to_string())
-            .or_insert_with(BackendMetrics::new)
+            .or_default()
             .last_rtt_ms
             .store(rtt_ms, Ordering::Relaxed);
     }
@@ -120,6 +120,7 @@ impl MetricsStore for DashMapMetricsStore {
 }
 
 #[cfg(test)]
+#[cfg_attr(coverage_nightly, coverage(off))]
 mod tests {
     use super::*;
 
@@ -321,5 +322,51 @@ mod tests {
         }
 
         assert_eq!(store.get_connection_count("backend-1"), 1000);
+    }
+
+    #[test]
+    fn test_concurrent_decrements() {
+        use std::sync::Arc;
+        use std::thread;
+
+        let store = Arc::new(DashMapMetricsStore::new());
+
+        // First increment 1000 times
+        for _ in 0..1000 {
+            store.increment_connections("backend-1");
+        }
+
+        let mut handles = vec![];
+
+        // Then decrement concurrently
+        for _ in 0..10 {
+            let store = store.clone();
+            handles.push(thread::spawn(move || {
+                for _ in 0..100 {
+                    store.decrement_connections("backend-1");
+                }
+            }));
+        }
+
+        for h in handles {
+            h.join().unwrap();
+        }
+
+        assert_eq!(store.get_connection_count("backend-1"), 0);
+    }
+
+    #[test]
+    fn test_backend_metrics_default() {
+        let metrics = BackendMetrics::default();
+        assert_eq!(metrics.current_conns.load(Ordering::Relaxed), 0);
+        assert_eq!(metrics.last_rtt_ms.load(Ordering::Relaxed), 0);
+    }
+
+    #[test]
+    fn test_backend_metrics_debug() {
+        let metrics = BackendMetrics::new();
+        let debug_str = format!("{:?}", metrics);
+        assert!(debug_str.contains("current_conns"));
+        assert!(debug_str.contains("last_rtt_ms"));
     }
 }

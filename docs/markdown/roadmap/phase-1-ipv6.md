@@ -1,8 +1,8 @@
 ---
-sidebar_position: 4
+sidebar_position: 1
 ---
 
-# Phase 4: IPv6 Private Network (6PN)
+# Phase 1: IPv6 Private Network (6PN)
 
 **Goal**: Migrate from IPv4 to IPv6 for unlimited address space and modern networking.
 
@@ -46,9 +46,9 @@ Where:
 ## Dual-Stack Transition
 
 ```
-Phase 4a: Add IPv6 alongside IPv4 (dual-stack)
-Phase 4b: Prefer IPv6 for new connections
-Phase 4c: Deprecate IPv4 internal traffic
+Phase 1a: Add IPv6 alongside IPv4 (dual-stack)
+Phase 1b: Prefer IPv6 for new connections
+Phase 1c: Deprecate IPv4 internal traffic
 ```
 
 ## Benefits
@@ -61,5 +61,4 @@ Phase 4c: Deprecate IPv4 internal traffic
 ## Related
 
 - [Roadmap Overview](../roadmap/)
-- [Phase 3: Auto-Discovery](./phase-3-auto-discovery)
-- [Phase 5: Anycast BGP](./phase-5-anycast-bgp)
+- [Phase 2: Anycast BGP](./phase-2-anycast-bgp)

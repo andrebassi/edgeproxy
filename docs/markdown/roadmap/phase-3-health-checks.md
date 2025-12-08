@@ -1,8 +1,8 @@
 ---
-sidebar_position: 6
+sidebar_position: 3
 ---
 
-# Phase 6: Active Health Checks
+# Phase 3: Active Health Checks
 
 **Goal**: Proactive health monitoring instead of reactive failure detection.
 
@@ -65,4 +65,4 @@ async fn check_health(backend: &Backend) -> HealthStatus {
 ## Related
 
 - [Roadmap Overview](../roadmap/)
-- [Phase 5: Anycast BGP](./phase-5-anycast-bgp)
+- [Phase 2: Anycast BGP](./phase-2-anycast-bgp)

@@ -1,8 +1,8 @@
 ---
-sidebar_position: 5
+sidebar_position: 2
 ---
 
-# Fase 5: Anycast BGP
+# Fase 2: Anycast BGP
 
 **Objetivo**: Substituir GeoDNS por BGP Anycast para failover instantâneo e roteamento ótimo.
 
@@ -18,14 +18,14 @@ sidebar_position: 5
 
 | Requisito | Opções |
 |-----------|--------|
-| **ASN** | Privado (64512-65534) ou Público (de RIR) |
-| **Bloco IP** | Mínimo /24 (256 IPs) de RIR ou provedor |
+| **ASN** | Privado (64512-65534) ou Público (do RIR) |
+| **Bloco IP** | /24 mínimo (256 IPs) do RIR ou provedor |
 | **Trânsito** | Vultr, Packet, AWS Direct Connect |
 | **Software** | BIRD, FRRouting, GoBGP |
 
 ## Opções de Implementação
 
-**Opção A: BGP via Provedor de Cloud**
+**Opção A: BGP de Provedor Cloud**
 - Vultr BGP (~$5/mês por localização)
 - Packet/Equinix Metal (BGP nativo)
 - AWS Global Accelerator (anycast gerenciado)
@@ -59,13 +59,13 @@ protocol static {
 
 ## Benefícios
 
-- **Failover instantâneo**: Sem esperar TTL DNS
+- **Failover instantâneo**: Sem espera de TTL DNS
 - **Roteamento ótimo**: BGP encontra melhor caminho
 - **Resiliência DDoS**: Tráfego distribuído globalmente
-- **IP único**: Configuração de cliente simplificada
+- **IP único**: Configuração de cliente mais simples
 
 ## Relacionado
 
 - [Visão Geral do Roadmap](../roadmap/)
-- [Fase 4: Rede Privada IPv6](./phase-4-ipv6)
-- [Fase 6: Health Checks Ativos](./phase-6-health-checks)
+- [Fase 1: Rede Privada IPv6](./phase-1-ipv6)
+- [Fase 3: Health Checks Ativos](./phase-3-health-checks)

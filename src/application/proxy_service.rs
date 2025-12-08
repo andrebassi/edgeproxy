@@ -215,6 +215,7 @@ impl ProxyService {
 }
 
 #[cfg(test)]
+#[cfg_attr(coverage_nightly, coverage(off))]
 mod tests {
     use super::*;
     use crate::domain::entities::Backend;
@@ -754,6 +755,130 @@ mod tests {
         assert_eq!(*service.local_region(), RegionCode::Europe);
     }
 
+    // ===== Binding with non-existent backend =====
+
+    #[tokio::test]
+    async fn test_resolve_backend_removes_stale_binding_for_missing() {
+        // Backend was deleted (not just unhealthy)
+        let backends = vec![
+            create_test_backend("br-2", "sa", "BR"),
+        ];
+
+        let binding_repo = Arc::new(MockBindingRepo::new());
+        let client_ip: IpAddr = "192.168.1.1".parse().unwrap();
+
+        // Pre-create a binding to a backend that no longer exists
+        binding_repo
+            .set(
+                ClientKey::new(client_ip),
+                Binding::new("deleted-backend".to_string()),
+            )
+            .await;
+
+        let service = ProxyService::new(
+            Arc::new(MockBackendRepo { backends }),
+            binding_repo.clone(),
+            None,
+            Arc::new(MockMetrics::new()),
+            RegionCode::SouthAmerica,
+        );
+
+        let result = service.resolve_backend(client_ip).await;
+
+        // Should pick br-2 since deleted-backend doesn't exist
+        assert!(result.is_some());
+        assert_eq!(result.unwrap().id, "br-2");
+
+        // Binding should now point to br-2
+        let binding = binding_repo.get(&ClientKey::new(client_ip)).await;
+        assert_eq!(binding.unwrap().backend_id, "br-2");
+    }
+
+    #[tokio::test]
+    async fn test_resolve_backend_with_geo_removes_stale_for_unhealthy() {
+        let backends = vec![
+            create_unhealthy_backend("br-1", "sa", "BR"),
+            create_test_backend("br-2", "sa", "BR"),
+        ];
+
+        let binding_repo = Arc::new(MockBindingRepo::new());
+        let client_ip: IpAddr = "192.168.1.1".parse().unwrap();
+
+        // Pre-create binding to unhealthy backend
+        binding_repo
+            .set(
+                ClientKey::new(client_ip),
+                Binding::new("br-1".to_string()),
+            )
+            .await;
+
+        let service = ProxyService::new(
+            Arc::new(MockBackendRepo { backends }),
+            binding_repo.clone(),
+            None,
+            Arc::new(MockMetrics::new()),
+            RegionCode::SouthAmerica,
+        );
+
+        let client_geo = Some(GeoInfo::new("BR".to_string(), RegionCode::SouthAmerica));
+        let result = service.resolve_backend_with_geo(client_ip, client_geo).await;
+
+        assert!(result.is_some());
+        assert_eq!(result.unwrap().id, "br-2");
+    }
+
+    #[tokio::test]
+    async fn test_resolve_backend_with_geo_removes_stale_for_missing() {
+        let backends = vec![create_test_backend("br-2", "sa", "BR")];
+
+        let binding_repo = Arc::new(MockBindingRepo::new());
+        let client_ip: IpAddr = "192.168.1.1".parse().unwrap();
+
+        // Pre-create binding to non-existent backend
+        binding_repo
+            .set(
+                ClientKey::new(client_ip),
+                Binding::new("deleted-backend".to_string()),
+            )
+            .await;
+
+        let service = ProxyService::new(
+            Arc::new(MockBackendRepo { backends }),
+            binding_repo.clone(),
+            None,
+            Arc::new(MockMetrics::new()),
+            RegionCode::SouthAmerica,
+        );
+
+        let client_geo = Some(GeoInfo::new("BR".to_string(), RegionCode::SouthAmerica));
+        let result = service.resolve_backend_with_geo(client_ip, client_geo).await;
+
+        assert!(result.is_some());
+        assert_eq!(result.unwrap().id, "br-2");
+    }
+
+    #[tokio::test]
+    async fn test_resolve_backend_with_geo_no_healthy_backends() {
+        let backends = vec![
+            create_unhealthy_backend("br-1", "sa", "BR"),
+            create_unhealthy_backend("br-2", "sa", "BR"),
+        ];
+
+        let service = ProxyService::new(
+            Arc::new(MockBackendRepo { backends }),
+            Arc::new(MockBindingRepo::new()),
+            None,
+            Arc::new(MockMetrics::new()),
+            RegionCode::SouthAmerica,
+        );
+
+        let client_ip: IpAddr = "192.168.1.1".parse().unwrap();
+        let client_geo = Some(GeoInfo::new("BR".to_string(), RegionCode::SouthAmerica));
+        let result = service.resolve_backend_with_geo(client_ip, client_geo).await;
+
+        assert!(result.is_none());
+    }
+
     // ===== Multiple Clients Tests =====
 
     #[tokio::test]
@@ -793,5 +918,166 @@ mod tests {
         let binding_us = binding_repo.get(&ClientKey::new(client_ip_us)).await;
         assert_eq!(binding_br.unwrap().backend_id, "br-1");
         assert_eq!(binding_us.unwrap().backend_id, "us-1");
+    }
+
+    #[tokio::test]
+    async fn test_run_binding_cleanup() {
+        let backends = vec![create_test_backend("br-1", "sa", "BR")];
+        let binding_repo = Arc::new(MockBindingRepo::new());
+        let client_ip: IpAddr = "192.168.1.1".parse().unwrap();
+
+        // Create binding
+        binding_repo
+            .set(
+                ClientKey::new(client_ip),
+                Binding::new("br-1".to_string()),
+            )
+            .await;
+
+        let service = Arc::new(ProxyService::new(
+            Arc::new(MockBackendRepo { backends }),
+            binding_repo.clone(),
+            None,
+            Arc::new(MockMetrics::new()),
+            RegionCode::SouthAmerica,
+        ));
+
+        assert_eq!(binding_repo.count().await, 1);
+
+        // Run cleanup with TTL of 0 (immediate expiration)
+        let service_clone = service.clone();
+        let cleanup_handle = tokio::spawn(async move {
+            service_clone.run_binding_cleanup(
+                Duration::from_millis(0), // immediate expiration
+                Duration::from_millis(100), // check every 100ms
+            ).await;
+        });
+
+        // Wait for cleanup to run
+        tokio::time::sleep(Duration::from_millis(150)).await;
+
+        // Binding should be removed
+        assert_eq!(binding_repo.count().await, 0);
+
+        // Stop cleanup task
+        cleanup_handle.abort();
+    }
+
+    #[tokio::test]
+    async fn test_run_binding_cleanup_keeps_fresh() {
+        let backends = vec![create_test_backend("br-1", "sa", "BR")];
+        let binding_repo = Arc::new(MockBindingRepo::new());
+        let client_ip: IpAddr = "192.168.1.1".parse().unwrap();
+
+        // Create binding
+        binding_repo
+            .set(
+                ClientKey::new(client_ip),
+                Binding::new("br-1".to_string()),
+            )
+            .await;
+
+        let service = Arc::new(ProxyService::new(
+            Arc::new(MockBackendRepo { backends }),
+            binding_repo.clone(),
+            None,
+            Arc::new(MockMetrics::new()),
+            RegionCode::SouthAmerica,
+        ));
+
+        // Run cleanup with TTL of 1 hour (won't expire)
+        let service_clone = service.clone();
+        let cleanup_handle = tokio::spawn(async move {
+            service_clone.run_binding_cleanup(
+                Duration::from_secs(3600), // 1 hour TTL
+                Duration::from_millis(50), // check every 50ms
+            ).await;
+        });
+
+        // Wait for cleanup to run
+        tokio::time::sleep(Duration::from_millis(100)).await;
+
+        // Binding should still exist
+        assert_eq!(binding_repo.count().await, 1);
+
+        cleanup_handle.abort();
+    }
+
+    // ===== Tests for Mock methods coverage =====
+
+    #[tokio::test]
+    async fn test_mock_backend_repo_get_all() {
+        let backends = vec![
+            create_test_backend("br-1", "sa", "BR"),
+            create_test_backend("br-2", "sa", "BR"),
+        ];
+        let repo = MockBackendRepo { backends: backends.clone() };
+
+        let all = repo.get_all().await;
+        assert_eq!(all.len(), 2);
+        assert_eq!(all[0].id, "br-1");
+        assert_eq!(all[1].id, "br-2");
+    }
+
+    #[tokio::test]
+    async fn test_mock_backend_repo_get_version() {
+        let backends = vec![create_test_backend("br-1", "sa", "BR")];
+        let repo = MockBackendRepo { backends };
+
+        let version = repo.get_version().await;
+        assert_eq!(version, 1);
+    }
+
+    // ===== Test LoadBalancer returning None (all backends at hard limit) =====
+
+    #[tokio::test]
+    async fn test_resolve_backend_all_at_hard_limit() {
+        // Create a backend with hard_limit = 1
+        let mut backend = create_test_backend("br-1", "sa", "BR");
+        backend.hard_limit = 1;
+
+        let metrics = Arc::new(MockMetrics::new());
+        // Simulate 1 connection already (at hard_limit)
+        metrics.increment_connections("br-1");
+
+        let service = ProxyService::new(
+            Arc::new(MockBackendRepo { backends: vec![backend] }),
+            Arc::new(MockBindingRepo::new()),
+            None,
+            metrics,
+            RegionCode::SouthAmerica,
+        );
+
+        let client_ip: IpAddr = "192.168.1.1".parse().unwrap();
+        let result = service.resolve_backend(client_ip).await;
+
+        // Should return None because backend is at hard_limit
+        assert!(result.is_none());
+    }
+
+    #[tokio::test]
+    async fn test_resolve_backend_with_geo_all_at_hard_limit() {
+        // Create a backend with hard_limit = 1
+        let mut backend = create_test_backend("br-1", "sa", "BR");
+        backend.hard_limit = 1;
+
+        let metrics = Arc::new(MockMetrics::new());
+        // Simulate 1 connection already (at hard_limit)
+        metrics.increment_connections("br-1");
+
+        let service = ProxyService::new(
+            Arc::new(MockBackendRepo { backends: vec![backend] }),
+            Arc::new(MockBindingRepo::new()),
+            None,
+            metrics,
+            RegionCode::SouthAmerica,
+        );
+
+        let client_ip: IpAddr = "192.168.1.1".parse().unwrap();
+        let client_geo = Some(GeoInfo::new("BR".to_string(), RegionCode::SouthAmerica));
+        let result = service.resolve_backend_with_geo(client_ip, client_geo).await;
+
+        // Should return None because backend is at hard_limit
+        assert!(result.is_none());
     }
 }

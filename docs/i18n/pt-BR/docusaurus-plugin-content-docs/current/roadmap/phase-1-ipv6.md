@@ -1,8 +1,8 @@
 ---
-sidebar_position: 4
+sidebar_position: 1
 ---
 
-# Fase 4: Rede Privada IPv6 (6PN)
+# Fase 1: Rede Privada IPv6 (6PN)
 
 **Objetivo**: Migrar de IPv4 para IPv6 para espaço de endereços ilimitado e networking moderno.
 
@@ -22,7 +22,7 @@ Endereços: 2^80 (ilimitado)
 Protocolo: IPv6 sobre WireGuard
 ```
 
-## Schema de Endereços
+## Esquema de Endereços
 
 ```
 fd00:edgeproxy:RRRR:BBBB::1
@@ -38,7 +38,7 @@ Onde:
 
 | Backend | IPv4 (atual) | IPv6 (futuro) |
 |---------|--------------|---------------|
-| EC2 Ireland | 10.50.0.1 | fd00:edgeproxy:0001:0001::1 |
+| EC2 Irlanda | 10.50.0.1 | fd00:edgeproxy:0001:0001::1 |
 | GRU | 10.50.1.1 | fd00:edgeproxy:0003:0001::1 |
 | NRT | 10.50.4.1 | fd00:edgeproxy:0004:0001::1 |
 | HKG POP | 10.50.5.1 | fd00:edgeproxy:0004:0100::1 |
@@ -46,20 +46,19 @@ Onde:
 ## Transição Dual-Stack
 
 ```
-Fase 4a: Adicionar IPv6 ao lado do IPv4 (dual-stack)
-Fase 4b: Preferir IPv6 para novas conexões
-Fase 4c: Depreciar tráfego interno IPv4
+Fase 1a: Adicionar IPv6 junto com IPv4 (dual-stack)
+Fase 1b: Preferir IPv6 para novas conexões
+Fase 1c: Depreciar tráfego interno IPv4
 ```
 
 ## Benefícios
 
 - **Escala ilimitada**: Sem exaustão de endereços
-- **Padrão moderno**: Aplicações IPv6-nativas
+- **Padrão moderno**: Aplicações nativas IPv6
 - **Roteamento simplificado**: Endereçamento hierárquico
-- **Future-proof**: Pronto para próxima década
+- **Prova de futuro**: Pronto para a próxima década
 
 ## Relacionado
 
 - [Visão Geral do Roadmap](../roadmap/)
-- [Fase 3: Auto-Discovery](./phase-3-auto-discovery)
-- [Fase 5: Anycast BGP](./phase-5-anycast-bgp)
+- [Fase 2: Anycast BGP](./phase-2-anycast-bgp)
