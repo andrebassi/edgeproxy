@@ -109,85 +109,115 @@ The following diagram shows how the load balancer scores and selects backends ba
 
 ## Implementation
 
-### Source Code (`lb.rs`)
+### Hexagonal Architecture
+
+The load balancer is implemented as a **pure domain service** with NO external dependencies. It doesn't know about DashMap, SQLite, or any infrastructure.
+
+```
+src/domain/services/load_balancer.rs  ← Pure business logic
+```
+
+### Source Code (`domain/services/load_balancer.rs`)
 
 ```rust
-use crate::model::Backend;
-use dashmap::DashMap;
-use std::sync::atomic::{AtomicU64, Ordering};
+use crate::domain::entities::{Backend, GeoInfo};
+use crate::domain::value_objects::RegionCode;
 
-#[derive(Default)]
-pub struct BackendMetrics {
-    pub current_conns: AtomicU64,
-    pub last_rtt_ms: AtomicU64,
-}
+/// Load balancer service - PURE function, no external dependencies
+pub struct LoadBalancer;
 
-impl BackendMetrics {
-    pub fn new() -> Self {
-        Self::default()
-    }
-}
+impl LoadBalancer {
+    /// Select the best backend for a client.
+    ///
+    /// Note: `get_conn_count` is a closure - the LoadBalancer doesn't know
+    /// about DashMap or any specific metrics implementation.
+    pub fn pick_backend<F>(
+        backends: &[Backend],
+        local_region: &RegionCode,
+        client_geo: Option<&GeoInfo>,
+        get_conn_count: F,  // Injected dependency via closure
+    ) -> Option<Backend>
+    where
+        F: Fn(&str) -> usize,
+    {
+        let mut best: Option<(Backend, f64)> = None;
 
-pub fn pick_backend(
-    backends: &[Backend],
-    local_region: &str,
-    client_region: Option<&str>,
-    client_country: Option<&str>,  // NEW: country-based routing
-    metrics: &DashMap<String, BackendMetrics>,
-) -> Option<Backend> {
-    let mut best: Option<(Backend, f64)> = None;
+        for backend in backends.iter().filter(|b| b.healthy) {
+            let current = get_conn_count(&backend.id) as f64;
 
-    for b in backends {
-        // Skip unhealthy backends
-        if !b.healthy {
-            continue;
-        }
+            let soft = if backend.soft_limit == 0 { 1.0 } else { backend.soft_limit as f64 };
+            let hard = if backend.hard_limit == 0 { f64::MAX } else { backend.hard_limit as f64 };
 
-        // Get current connection count
-        let conns = metrics
-            .get(&b.id)
-            .map(|m| m.current_conns.load(Ordering::Relaxed))
-            .unwrap_or(0);
+            // Skip if at hard limit
+            if current >= hard {
+                continue;
+            }
 
-        // Skip backends at hard limit
-        if conns >= b.hard_limit as u64 {
-            continue;
-        }
+            // Calculate geo score (0-3 scale, lower is better)
+            let geo_score = Self::calculate_geo_score(backend, local_region, client_geo);
 
-        // Calculate geo score (country > region > local > fallback)
-        let geo_score = if client_country.is_some()
-            && Some(b.country.as_str()) == client_country {
-            0.0 // Best: same country (FR → CDG)
-        } else if Some(b.region.as_str()) == client_region {
-            1.0 // Good: same region (FR → any EU)
-        } else if b.region == local_region {
-            2.0 // OK: local POP region
-        } else {
-            3.0 // Fallback: cross-region
-        };
+            // Calculate load factor
+            let load_factor = current / soft;
 
-        // Calculate load factor
-        let load_factor = conns as f64 / b.soft_limit as f64;
+            // Weight factor
+            let weight = if backend.weight == 0 { 1.0 } else { backend.weight as f64 };
 
-        // Final score (lower is better)
-        let score = geo_score * 100.0 + (load_factor / b.weight as f64);
+            // Final score
+            let score = geo_score * 100.0 + (load_factor / weight);
 
-        // Update best if this is better
-        match &best {
-            Some((_, best_score)) => {
-                if score < *best_score {
-                    best = Some((b.clone(), score));
+            match &best {
+                Some((_, best_score)) if score < *best_score => {
+                    best = Some((backend.clone(), score));
                 }
-            }
-            None => {
-                best = Some((b.clone(), score));
+                None => {
+                    best = Some((backend.clone(), score));
+                }
+                _ => {}
             }
         }
+
+        best.map(|(backend, _)| backend)
     }
 
-    best.map(|(b, _)| b)
+    fn calculate_geo_score(
+        backend: &Backend,
+        local_region: &RegionCode,
+        client_geo: Option<&GeoInfo>,
+    ) -> f64 {
+        match client_geo {
+            Some(geo) if backend.country == geo.country => 0.0,  // Same country
+            Some(geo) if backend.region == geo.region => 1.0,    // Same region
+            _ if backend.region == *local_region => 2.0,         // Local POP region
+            _ => 3.0,                                             // Fallback
+        }
+    }
 }
 ```
+
+### Usage in Application Layer
+
+The `ProxyService` calls the LoadBalancer with an injected closure:
+
+```rust
+// application/proxy_service.rs
+let metrics = self.metrics.clone();
+
+let backend = LoadBalancer::pick_backend(
+    &backends,
+    &self.local_region,
+    client_geo.as_ref(),
+    |id| metrics.get_connection_count(id),  // Closure injected here
+)?;
+```
+
+### Why This Design?
+
+| Benefit | Explanation |
+|---------|-------------|
+| **Testable** | Can test with mock data, no DashMap needed |
+| **Pure** | Same inputs always produce same outputs |
+| **Flexible** | Metrics can come from DashMap, Redis, Prometheus, etc. |
+| **Clear** | Business logic is isolated from infrastructure |
 
 ### Key Design Decisions
 

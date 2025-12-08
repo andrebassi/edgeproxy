@@ -1,0 +1,19 @@
+version: '3'
+
+tasks:
+  install:
+    desc: Install development dependencies
+    cmds:
+      - cargo install cargo-watch
+      - cargo install cargo-edit
+      - echo "Dev dependencies installed"
+
+  update:
+    desc: Update Cargo dependencies
+    cmds:
+      - cargo update
+
+  outdated:
+    desc: Check for outdated dependencies
+    cmds:
+      - cargo outdated || echo "Run cargo install cargo-outdated"

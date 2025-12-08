@@ -1,0 +1,272 @@
+version: '3'
+
+vars:
+  AWS_REGION: eu-west-1
+  INSTANCE_TYPE: t3.micro
+  AMI_ID: ami-0d940f23d527c3ab1  # Ubuntu 22.04 LTS
+  KEY_NAME: edgeproxy-key
+  SG_NAME: edgeproxy-sg
+  INSTANCE_NAME: edgeproxy-pop-eu
+
+tasks:
+  # ============================================
+  # AWS Credentials
+  # ============================================
+
+  check:
+    desc: Verify AWS credentials
+    cmds:
+      - aws sts get-caller-identity
+
+  # ============================================
+  # Security Group
+  # ============================================
+
+  sg:create:
+    desc: Create Security Group for edgeProxy
+    cmds:
+      - |
+        VPC_ID=$(aws ec2 describe-vpcs --filters "Name=is-default,Values=true" \
+          --query 'Vpcs[0].VpcId' --output text --region {{.AWS_REGION}})
+
+        SG_ID=$(aws ec2 create-security-group \
+          --group-name {{.SG_NAME}} \
+          --description "EdgeProxy - TCP proxy with WireGuard" \
+          --vpc-id $VPC_ID --query 'GroupId' --output text --region {{.AWS_REGION}})
+
+        echo "Security Group created: $SG_ID"
+
+        # SSH
+        aws ec2 authorize-security-group-ingress --group-id $SG_ID \
+          --protocol tcp --port 22 --cidr 0.0.0.0/0 --region {{.AWS_REGION}}
+        # edgeProxy
+        aws ec2 authorize-security-group-ingress --group-id $SG_ID \
+          --protocol tcp --port 8080 --cidr 0.0.0.0/0 --region {{.AWS_REGION}}
+        # WireGuard
+        aws ec2 authorize-security-group-ingress --group-id $SG_ID \
+          --protocol udp --port 51820 --cidr 0.0.0.0/0 --region {{.AWS_REGION}}
+
+        echo "Ingress rules added: SSH(22), edgeProxy(8080), WireGuard(51820)"
+
+  sg:list:
+    desc: List edgeProxy security groups
+    cmds:
+      - aws ec2 describe-security-groups --filters "Name=group-name,Values={{.SG_NAME}}*" --region {{.AWS_REGION}} --output table
+
+  # ============================================
+  # SSH Key Pair
+  # ============================================
+
+  key:create:
+    desc: Create SSH Key Pair
+    cmds:
+      - |
+        aws ec2 create-key-pair --key-name {{.KEY_NAME}} \
+          --query 'KeyMaterial' --output text --region {{.AWS_REGION}} > ~/.ssh/{{.KEY_NAME}}.pem
+        chmod 400 ~/.ssh/{{.KEY_NAME}}.pem
+        echo "Key pair created: ~/.ssh/{{.KEY_NAME}}.pem"
+
+  key:delete:
+    desc: Delete SSH Key Pair
+    cmds:
+      - aws ec2 delete-key-pair --key-name {{.KEY_NAME}} --region {{.AWS_REGION}}
+      - rm -f ~/.ssh/{{.KEY_NAME}}.pem
+      - echo "Key pair deleted"
+
+  # ============================================
+  # EC2 Instance
+  # ============================================
+
+  ec2:create:
+    desc: Create EC2 instance for edgeProxy POP
+    cmds:
+      - |
+        SG_ID=$(aws ec2 describe-security-groups --filters "Name=group-name,Values={{.SG_NAME}}" \
+          --query 'SecurityGroups[0].GroupId' --output text --region {{.AWS_REGION}})
+
+        INSTANCE_ID=$(aws ec2 run-instances \
+          --image-id {{.AMI_ID}} \
+          --instance-type {{.INSTANCE_TYPE}} \
+          --key-name {{.KEY_NAME}} \
+          --security-group-ids $SG_ID \
+          --tag-specifications 'ResourceType=instance,Tags=[{Key=Name,Value={{.INSTANCE_NAME}}}]' \
+          --query 'Instances[0].InstanceId' --output text --region {{.AWS_REGION}})
+
+        echo "Waiting for instance to run..."
+        aws ec2 wait instance-running --instance-ids $INSTANCE_ID --region {{.AWS_REGION}}
+
+        PUBLIC_IP=$(aws ec2 describe-instances --instance-ids $INSTANCE_ID \
+          --query 'Reservations[0].Instances[0].PublicIpAddress' --output text --region {{.AWS_REGION}})
+
+        echo ""
+        echo "Instance: $INSTANCE_ID"
+        echo "Public IP: $PUBLIC_IP"
+        echo "SSH: ssh -i ~/.ssh/{{.KEY_NAME}}.pem ubuntu@$PUBLIC_IP"
+
+  ec2:list:
+    desc: List EC2 instances
+    cmds:
+      - |
+        aws ec2 describe-instances \
+          --filters "Name=tag:Name,Values={{.INSTANCE_NAME}}*" \
+          --query 'Reservations[*].Instances[*].[InstanceId,State.Name,PublicIpAddress,Tags[?Key==`Name`].Value|[0]]' \
+          --output table --region {{.AWS_REGION}}
+
+  ec2:stop:
+    desc: "Stop EC2 instance. Usage: task aws:ec2:stop -- INSTANCE_ID"
+    cmds:
+      - |
+        if [ -z "{{.CLI_ARGS}}" ]; then
+          echo "Usage: task aws:ec2:stop -- <instance-id>"
+          exit 1
+        fi
+        aws ec2 stop-instances --instance-ids {{.CLI_ARGS}} --region {{.AWS_REGION}}
+        echo "Instance stopping: {{.CLI_ARGS}}"
+
+  ec2:start:
+    desc: "Start EC2 instance. Usage: task aws:ec2:start -- INSTANCE_ID"
+    cmds:
+      - |
+        if [ -z "{{.CLI_ARGS}}" ]; then
+          echo "Usage: task aws:ec2:start -- <instance-id>"
+          exit 1
+        fi
+        aws ec2 start-instances --instance-ids {{.CLI_ARGS}} --region {{.AWS_REGION}}
+        echo "Instance starting: {{.CLI_ARGS}}"
+
+  ec2:terminate:
+    desc: "Terminate EC2 instance. Usage: task aws:ec2:terminate -- INSTANCE_ID"
+    cmds:
+      - |
+        if [ -z "{{.CLI_ARGS}}" ]; then
+          echo "Usage: task aws:ec2:terminate -- <instance-id>"
+          exit 1
+        fi
+        aws ec2 terminate-instances --instance-ids {{.CLI_ARGS}} --region {{.AWS_REGION}}
+        echo "Instance terminating: {{.CLI_ARGS}}"
+
+  ec2:ssh:
+    desc: "SSH to EC2 instance. Usage: task aws:ec2:ssh -- PUBLIC_IP"
+    cmds:
+      - |
+        if [ -z "{{.CLI_ARGS}}" ]; then
+          echo "Usage: task aws:ec2:ssh -- <public-ip>"
+          exit 1
+        fi
+        ssh -i ~/.ssh/{{.KEY_NAME}}.pem ubuntu@{{.CLI_ARGS}}
+
+  # ============================================
+  # RDS PostgreSQL
+  # ============================================
+
+  rds:create:
+    desc: Create RDS PostgreSQL instance
+    vars:
+      DB_IDENTIFIER: edgeproxy-db
+      DB_NAME: contacts
+      DB_USER: postgres
+      DB_PASSWORD: EdgeProxy2024
+    cmds:
+      - |
+        aws rds create-db-instance \
+          --region {{.AWS_REGION}} \
+          --db-instance-identifier {{.DB_IDENTIFIER}} \
+          --db-instance-class db.t3.micro \
+          --engine postgres \
+          --engine-version 15 \
+          --master-username {{.DB_USER}} \
+          --master-user-password {{.DB_PASSWORD}} \
+          --allocated-storage 20 \
+          --storage-type gp2 \
+          --db-name {{.DB_NAME}} \
+          --publicly-accessible \
+          --backup-retention-period 1 \
+          --no-multi-az
+        echo "RDS instance creating (takes ~5-10 min): {{.DB_IDENTIFIER}}"
+
+  rds:status:
+    desc: Check RDS instance status
+    cmds:
+      - |
+        aws rds describe-db-instances \
+          --region {{.AWS_REGION}} \
+          --query 'DBInstances[*].[DBInstanceIdentifier,DBInstanceStatus,Endpoint.Address,Endpoint.Port]' \
+          --output table
+
+  rds:delete:
+    desc: "Delete RDS instance. Usage: task aws:rds:delete -- DB_IDENTIFIER"
+    cmds:
+      - |
+        if [ -z "{{.CLI_ARGS}}" ]; then
+          echo "Usage: task aws:rds:delete -- <db-identifier>"
+          exit 1
+        fi
+        aws rds delete-db-instance \
+          --region {{.AWS_REGION}} \
+          --db-instance-identifier {{.CLI_ARGS}} \
+          --skip-final-snapshot
+        echo "RDS instance deleting: {{.CLI_ARGS}}"
+
+  # ============================================
+  # Deploy edgeProxy to EC2
+  # ============================================
+
+  deploy:
+    desc: "Deploy edgeProxy to EC2. Usage: task aws:deploy -- PUBLIC_IP"
+    cmds:
+      - |
+        if [ -z "{{.CLI_ARGS}}" ]; then
+          echo "Usage: task aws:deploy -- <public-ip>"
+          exit 1
+        fi
+        EC2_IP="{{.CLI_ARGS}}"
+
+        echo "Copying Linux binary and routing.db to EC2..."
+        scp -i ~/.ssh/{{.KEY_NAME}}.pem dist/edge-proxy-linux-amd64 ubuntu@$EC2_IP:/tmp/edge-proxy
+        scp -i ~/.ssh/{{.KEY_NAME}}.pem routing.db ubuntu@$EC2_IP:/tmp/
+
+        echo "Setting up on EC2..."
+        ssh -i ~/.ssh/{{.KEY_NAME}}.pem ubuntu@$EC2_IP "
+          sudo mkdir -p /opt/edgeproxy
+          sudo mv /tmp/edge-proxy /opt/edgeproxy/
+          sudo mv /tmp/routing.db /opt/edgeproxy/
+          sudo chmod +x /opt/edgeproxy/edge-proxy
+        "
+        echo "Deploy complete. Create systemd service with: task aws:service:create -- $EC2_IP"
+
+  service:create:
+    desc: "Create systemd service on EC2. Usage: task aws:service:create -- PUBLIC_IP"
+    cmds:
+      - |
+        if [ -z "{{.CLI_ARGS}}" ]; then
+          echo "Usage: task aws:service:create -- <public-ip>"
+          exit 1
+        fi
+        EC2_IP="{{.CLI_ARGS}}"
+
+        ssh -i ~/.ssh/{{.KEY_NAME}}.pem ubuntu@$EC2_IP "
+        cat | sudo tee /etc/systemd/system/edgeproxy.service << 'EOF'
+        [Unit]
+        Description=edgeProxy TCP Proxy
+        After=network.target wireguard.service
+
+        [Service]
+        Type=simple
+        User=root
+        WorkingDirectory=/opt/edgeproxy
+        Environment=EDGEPROXY_REGION=eu
+        Environment=EDGEPROXY_LISTEN_ADDR=0.0.0.0:8080
+        Environment=EDGEPROXY_DB_PATH=/opt/edgeproxy/routing.db
+        ExecStart=/opt/edgeproxy/edge-proxy
+        Restart=always
+        RestartSec=5
+
+        [Install]
+        WantedBy=multi-user.target
+        EOF
+
+        sudo systemctl daemon-reload
+        sudo systemctl enable edgeproxy
+        sudo systemctl start edgeproxy
+        sudo systemctl status edgeproxy
+        "

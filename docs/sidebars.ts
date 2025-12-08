@@ -28,6 +28,7 @@ const sidebars: SidebarsConfig = {
     },
     'deployment/gcp',
     'configuration',
+    'testing',
     'performance',
     'benchmark',
     {

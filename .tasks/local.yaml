@@ -1,0 +1,32 @@
+version: '3'
+
+tasks:
+  env:
+    desc: Start local test environment (3 backends + proxy)
+    deps: [build:release]
+    cmds:
+      - ./tests/scripts/start_local_env.sh
+
+  test:
+    desc: Run routing tests against local environment
+    cmds:
+      - ./tests/scripts/test_routing.sh
+
+  db-setup:
+    desc: Configure routing.db for local testing (localhost backends)
+    cmds:
+      - |
+        sqlite3 routing.db << 'EOF'
+        DELETE FROM backends;
+        INSERT INTO backends (id, app, region, wg_ip, port, healthy, weight, soft_limit, hard_limit)
+        VALUES
+          ('sa-node-1', 'myapp', 'sa', '127.0.0.1', 9001, 1, 1, 100, 200),
+          ('us-node-1', 'myapp', 'us', '127.0.0.1', 9002, 1, 1, 100, 200),
+          ('eu-node-1', 'myapp', 'eu', '127.0.0.1', 9003, 1, 1, 100, 200);
+        EOF
+      - task db:show
+
+  db-reset:
+    desc: Reset routing.db to original WireGuard IPs
+    cmds:
+      - task db:init

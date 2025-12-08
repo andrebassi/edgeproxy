@@ -1,0 +1,211 @@
+version: '3'
+
+vars:
+  LINUX_AMD64_TARGET: x86_64-unknown-linux-gnu
+  LINUX_ARM64_TARGET: aarch64-unknown-linux-gnu
+  MACOS_AMD64_TARGET: x86_64-apple-darwin
+  MACOS_ARM64_TARGET: aarch64-apple-darwin
+  DIST_DIR: ./dist
+
+tasks:
+  build:
+    desc: Build debug binary (native)
+    cmds:
+      - cargo build
+    sources:
+      - src/**/*.rs
+      - Cargo.toml
+    generates:
+      - "{{.DEBUG_BIN}}"
+
+  release:
+    desc: Build release binary (native, optimized)
+    cmds:
+      - cargo build --release
+    sources:
+      - src/**/*.rs
+      - Cargo.toml
+    generates:
+      - "{{.RELEASE_BIN}}"
+
+  linux:
+    desc: Build release for Linux AMD64 (native cross-compile with linker)
+    cmds:
+      - task: targets:add
+        vars: { TARGET: "{{.LINUX_AMD64_TARGET}}" }
+      - cargo build --release --target {{.LINUX_AMD64_TARGET}}
+      - mkdir -p {{.DIST_DIR}}
+      - cp target/{{.LINUX_AMD64_TARGET}}/release/{{.BINARY_NAME}} {{.DIST_DIR}}/{{.BINARY_NAME}}-linux-amd64
+      - echo "Built {{.DIST_DIR}}/{{.BINARY_NAME}}-linux-amd64"
+    sources:
+      - src/**/*.rs
+      - Cargo.toml
+
+  linux-arm:
+    desc: Build release for Linux ARM64 (native cross-compile with linker)
+    cmds:
+      - task: targets:add
+        vars: { TARGET: "{{.LINUX_ARM64_TARGET}}" }
+      - cargo build --release --target {{.LINUX_ARM64_TARGET}}
+      - mkdir -p {{.DIST_DIR}}
+      - cp target/{{.LINUX_ARM64_TARGET}}/release/{{.BINARY_NAME}} {{.DIST_DIR}}/{{.BINARY_NAME}}-linux-arm64
+      - echo "Built {{.DIST_DIR}}/{{.BINARY_NAME}}-linux-arm64"
+    sources:
+      - src/**/*.rs
+      - Cargo.toml
+
+  linux-cross:
+    desc: Build for Linux AMD64 using cross tool (requires Docker)
+    cmds:
+      - task: cross:check
+      - CROSS_CUSTOM_TOOLCHAIN=1 cross build --release --target {{.LINUX_AMD64_TARGET}}
+      - mkdir -p {{.DIST_DIR}}
+      - cp target/{{.LINUX_AMD64_TARGET}}/release/{{.BINARY_NAME}} {{.DIST_DIR}}/{{.BINARY_NAME}}-linux-amd64
+    sources:
+      - src/**/*.rs
+      - Cargo.toml
+
+  linux-docker:
+    desc: Build for Linux AMD64 using Docker (alternative to cross)
+    cmds:
+      - mkdir -p {{.DIST_DIR}}
+      - |
+        docker run --rm \
+          -v "$(pwd)":/app \
+          -w /app \
+          rust:1.83-bookworm \
+          cargo build --release --target {{.LINUX_AMD64_TARGET}}
+      - cp target/{{.LINUX_AMD64_TARGET}}/release/{{.BINARY_NAME}} {{.DIST_DIR}}/{{.BINARY_NAME}}-linux-amd64
+    sources:
+      - src/**/*.rs
+      - Cargo.toml
+
+  cross:check:
+    desc: Ensure cross is installed
+    internal: true
+    cmds:
+      - |
+        if ! command -v cross &> /dev/null; then
+          echo "Installing cross..."
+          cargo install cross --git https://github.com/cross-rs/cross
+        fi
+    status:
+      - command -v cross
+
+  cross:install:
+    desc: Install cross for cross-compilation
+    cmds:
+      - cargo install cross --git https://github.com/cross-rs/cross
+
+  setup:
+    desc: Setup complete cross-compilation toolchain
+    cmds:
+      - echo "=== Setting up Rust cross-compilation toolchain ==="
+      - echo ""
+      - echo "1. Installing Rust targets..."
+      - task: targets:setup
+      - echo ""
+      - echo "2. Installing cross (Docker-based cross-compiler)..."
+      - task: cross:install
+      - echo ""
+      - echo "3. Checking for Linux linkers (optional, for native cross-compile)..."
+      - |
+        if command -v x86_64-unknown-linux-gnu-gcc &> /dev/null; then
+          echo "   ✓ x86_64-unknown-linux-gnu linker found"
+        else
+          echo "   ✗ x86_64-unknown-linux-gnu linker not found"
+          echo "     Install with: brew tap messense/macos-cross-toolchains && brew install x86_64-unknown-linux-gnu"
+        fi
+      - |
+        if command -v aarch64-unknown-linux-gnu-gcc &> /dev/null; then
+          echo "   ✓ aarch64-unknown-linux-gnu linker found"
+        else
+          echo "   ✗ aarch64-unknown-linux-gnu linker not found"
+          echo "     Install with: brew tap messense/macos-cross-toolchains && brew install aarch64-unknown-linux-gnu"
+        fi
+      - echo ""
+      - echo "=== Setup complete ==="
+      - echo ""
+      - echo "Build commands:"
+      - echo "  task build:release    # Native release build"
+      - echo "  task build:linux      # Linux AMD64 (uses cross/Docker)"
+      - echo "  task build:linux-arm  # Linux ARM64 (uses cross/Docker)"
+      - echo "  task build:all        # All platforms"
+
+  macos:
+    desc: Build release for macOS (native arch)
+    cmds:
+      - cargo build --release
+      - mkdir -p {{.DIST_DIR}}
+      - |
+        if [ "$(uname -m)" = "arm64" ]; then
+          cp target/release/{{.BINARY_NAME}} {{.DIST_DIR}}/{{.BINARY_NAME}}-darwin-arm64
+        else
+          cp target/release/{{.BINARY_NAME}} {{.DIST_DIR}}/{{.BINARY_NAME}}-darwin-amd64
+        fi
+    sources:
+      - src/**/*.rs
+      - Cargo.toml
+
+  macos-universal:
+    desc: Build universal macOS binary (AMD64 + ARM64)
+    cmds:
+      - task: targets:add
+        vars: { TARGET: "{{.MACOS_AMD64_TARGET}}" }
+      - task: targets:add
+        vars: { TARGET: "{{.MACOS_ARM64_TARGET}}" }
+      - cargo build --release --target {{.MACOS_AMD64_TARGET}}
+      - cargo build --release --target {{.MACOS_ARM64_TARGET}}
+      - mkdir -p {{.DIST_DIR}}
+      - lipo -create -output {{.DIST_DIR}}/{{.BINARY_NAME}}-darwin-universal target/{{.MACOS_AMD64_TARGET}}/release/{{.BINARY_NAME}} target/{{.MACOS_ARM64_TARGET}}/release/{{.BINARY_NAME}}
+    sources:
+      - src/**/*.rs
+      - Cargo.toml
+
+  all:
+    desc: Build for all platforms (Linux AMD64 + macOS native)
+    cmds:
+      - task: linux
+      - task: macos
+      - echo "Built binaries in {{.DIST_DIR}}/"
+      - ls -la {{.DIST_DIR}}/
+
+  dist:
+    desc: Build distribution for all major platforms
+    cmds:
+      - task: linux
+      - task: linux-arm
+      - task: macos
+      - echo ""
+      - echo "Distribution binaries:"
+      - ls -lah {{.DIST_DIR}}/
+
+  targets:add:
+    desc: Add Rust target (internal)
+    internal: true
+    cmds:
+      - rustup target add {{.TARGET}} 2>/dev/null || true
+    status:
+      - rustup target list --installed | grep -q {{.TARGET}}
+
+  targets:list:
+    desc: List installed Rust targets
+    cmds:
+      - rustup target list --installed
+
+  targets:setup:
+    desc: Install all cross-compilation targets
+    cmds:
+      - rustup target add {{.LINUX_AMD64_TARGET}}
+      - rustup target add {{.LINUX_ARM64_TARGET}}
+      - rustup target add {{.MACOS_AMD64_TARGET}}
+      - rustup target add {{.MACOS_ARM64_TARGET}}
+      - echo "Installed targets:"
+      - rustup target list --installed
+
+  clean:
+    desc: Clean build artifacts
+    cmds:
+      - cargo clean
+      - rm -rf {{.TARGET_DIR}}
+      - rm -rf {{.DIST_DIR}}

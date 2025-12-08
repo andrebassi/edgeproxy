@@ -1,0 +1,19 @@
+version: '3'
+
+tasks:
+  init:
+    desc: Initialize routing.db from schema
+    cmds:
+      - rm -f routing.db
+      - sqlite3 routing.db < sql/create_routing_db.sql
+      - echo "Database initialized with sample backends"
+
+  show:
+    desc: Show all backends in routing.db
+    cmds:
+      - sqlite3 -header -column routing.db "SELECT * FROM backends"
+
+  healthy:
+    desc: Show only healthy backends
+    cmds:
+      - sqlite3 -header -column routing.db "SELECT id, region, wg_ip, port FROM backends WHERE healthy = 1 AND (deleted IS NULL OR deleted = 0)"

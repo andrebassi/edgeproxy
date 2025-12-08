@@ -1,0 +1,59 @@
+version: '3'
+
+tasks:
+  watch:
+    desc: Run with auto-reload (requires cargo-watch)
+    cmds:
+      - cargo watch -x run
+
+  check:
+    desc: Check code without building
+    cmds:
+      - cargo check
+
+  fmt:
+    desc: Format code
+    cmds:
+      - cargo fmt
+
+  fmt-check:
+    desc: Check code formatting
+    cmds:
+      - cargo fmt -- --check
+
+  clippy:
+    desc: Run clippy linter
+    cmds:
+      - cargo clippy -- -D warnings
+
+  lint:
+    desc: Run all linters (fmt + clippy)
+    cmds:
+      - task: fmt-check
+      - task: clippy
+
+  info:
+    desc: Show build info
+    cmds:
+      - echo "Rust version"
+      - rustc --version
+      - echo ""
+      - echo "Cargo version"
+      - cargo --version
+      - echo ""
+      - echo "Target architecture"
+      - rustc -vV | grep host
+      - echo ""
+      - echo "Binary size (if built)"
+      - ls -lh {{.RELEASE_BIN}} 2>/dev/null || echo "Release binary not built yet"
+
+  size:
+    desc: Show binary size breakdown
+    deps: [build:release]
+    cmds:
+      - cargo bloat --release -n 20 || echo "Run cargo install cargo-bloat"
+
+  bench:
+    desc: Run benchmarks
+    cmds:
+      - cargo bench

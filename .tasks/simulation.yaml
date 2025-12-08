@@ -1,0 +1,13 @@
+version: '3'
+
+tasks:
+  start:
+    desc: Start full multi-region simulation (3 POPs + 9 backends)
+    deps: [build:release]
+    cmds:
+      - ./tests/scripts/simulate_multi_region.sh
+
+  test:
+    desc: Run multi-region routing tests
+    cmds:
+      - ./tests/scripts/test_multi_region.sh

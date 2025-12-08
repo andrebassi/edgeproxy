@@ -1,0 +1,62 @@
+version: '3'
+
+tasks:
+  # ============================================
+  # Rust Documentation
+  # ============================================
+
+  open:
+    desc: Generate and open Rust API documentation
+    cmds:
+      - cargo doc --open
+
+  build:
+    desc: Generate Rust API documentation
+    cmds:
+      - cargo doc --no-deps
+
+  # ============================================
+  # Docusaurus Documentation
+  # ============================================
+
+  install:
+    desc: Install documentation dependencies
+    dir: docs
+    cmds:
+      - npm install
+
+  dev:
+    desc: Start documentation dev server (English)
+    dir: docs
+    cmds:
+      - npm run start
+
+  dev-pt:
+    desc: Start documentation dev server (Portuguese)
+    dir: docs
+    cmds:
+      - npm run start -- --locale pt-BR
+
+  build-site:
+    desc: Build documentation static site
+    dir: docs
+    cmds:
+      - npm run build
+
+  serve:
+    desc: Serve built documentation locally
+    dir: docs
+    cmds:
+      - npm run serve
+
+  write-translations:
+    desc: Generate translation files
+    dir: docs
+    cmds:
+      - npm run write-translations -- --locale pt-BR
+
+  clean:
+    desc: Clean documentation build
+    dir: docs
+    cmds:
+      - rm -rf build .docusaurus

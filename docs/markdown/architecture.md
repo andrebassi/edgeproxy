@@ -23,6 +23,191 @@ edgeProxy is designed for multi-region deployments with WireGuard mesh networkin
 
 ![Multi-Region Architecture](/img/multi-region.svg)
 
+## Hexagonal Architecture (Ports & Adapters)
+
+edgeProxy uses **Hexagonal Architecture** to separate business logic from infrastructure concerns.
+
+### Why Hexagonal?
+
+1. **Testability**: The load balancing algorithm is a pure function - no SQLite, DashMap, or external dependencies. Can be unit tested with mock data.
+
+2. **Flexibility**: Want to switch from SQLite to PostgreSQL? Just create a new adapter implementing `BackendRepository`. The domain doesn't change.
+
+3. **Separation of Concerns**:
+   - **Domain**: Pure business rules (scoring, affinity logic)
+   - **Application**: Orchestration (coordinates domain + adapters)
+   - **Adapters**: Infrastructure details (SQLite, DashMap, MaxMind)
+
+4. **Dependency Inversion**: Domain defines interfaces (ports/traits), adapters implement them. Domain never imports infrastructure code.
+
+### Project Structure
+
+```
+src/
+├── main.rs                 # Composition root
+├── config.rs               # Environment configuration
+├── domain/                 # Core business logic (no external deps)
+│   ├── entities.rs         # Backend, Binding, ClientKey, GeoInfo
+│   ├── value_objects.rs    # RegionCode
+│   ├── ports/              # Interfaces (traits)
+│   │   ├── backend_repository.rs
+│   │   ├── binding_repository.rs
+│   │   ├── geo_resolver.rs
+│   │   └── metrics_store.rs
+│   └── services/
+│       └── load_balancer.rs  # Scoring algorithm (pure)
+├── application/            # Use cases / orchestration
+│   └── proxy_service.rs
+└── adapters/               # Infrastructure implementations
+    ├── inbound/
+    │   └── tcp_server.rs     # TCP listener
+    └── outbound/
+        ├── sqlite_backend_repo.rs    # BackendRepository impl
+        ├── dashmap_binding_repo.rs   # BindingRepository impl
+        ├── maxmind_geo_resolver.rs   # GeoResolver impl
+        └── dashmap_metrics_store.rs  # MetricsStore impl
+```
+
+### Layer Diagram
+
+```
+┌─────────────────────────────────────────────────────────────────────┐
+│                        INBOUND ADAPTERS                             │
+│                      (driving adapters)                             │
+│  ┌─────────────────────────────────────────────────────────────┐   │
+│  │  tcp_server.rs - accepts TCP connections, calls ProxyService│   │
+│  └─────────────────────────────────────────────────────────────┘   │
+└─────────────────────────────────────────────────────────────────────┘
+                                  │
+                                  ▼
+┌─────────────────────────────────────────────────────────────────────┐
+│                         APPLICATION                                  │
+│                    (orchestration / use cases)                       │
+│  ┌─────────────────────────────────────────────────────────────┐   │
+│  │  ProxyService - resolves backend, manages bindings          │   │
+│  └─────────────────────────────────────────────────────────────┘   │
+└─────────────────────────────────────────────────────────────────────┘
+                                  │
+                                  ▼
+┌─────────────────────────────────────────────────────────────────────┐
+│                           DOMAIN                                     │
+│                (pure business rules - ZERO external deps)            │
+│  ┌──────────────┐  ┌──────────────┐  ┌──────────────────────────┐  │
+│  │  entities    │  │ value_objects│  │  services/LoadBalancer   │  │
+│  │  - Backend   │  │ - RegionCode │  │  - pick_backend()        │  │
+│  │  - Binding   │  │              │  │  - calculate_geo_score() │  │
+│  │  - ClientKey │  │              │  │                          │  │
+│  └──────────────┘  └──────────────┘  └──────────────────────────┘  │
+│                                                                      │
+│  ┌──────────────────────────────────────────────────────────────┐  │
+│  │  ports (traits) - interfaces the domain EXPECTS              │  │
+│  │  - BackendRepository    - BindingRepository                  │  │
+│  │  - GeoResolver          - MetricsStore                       │  │
+│  └──────────────────────────────────────────────────────────────┘  │
+└─────────────────────────────────────────────────────────────────────┘
+                                  ▲
+                                  │ implements
+┌─────────────────────────────────────────────────────────────────────┐
+│                       OUTBOUND ADAPTERS                              │
+│                   (infrastructure / driven adapters)                 │
+│  ┌─────────────────┐  ┌─────────────────┐  ┌─────────────────────┐ │
+│  │ SqliteBackend   │  │ DashMapBinding  │  │ MaxMindGeoResolver  │ │
+│  │ Repository      │  │ Repository      │  │                     │ │
+│  └─────────────────┘  └─────────────────┘  └─────────────────────┘ │
+│  ┌─────────────────┐                                                │
+│  │ DashMapMetrics  │                                                │
+│  │ Store           │                                                │
+│  └─────────────────┘                                                │
+└─────────────────────────────────────────────────────────────────────┘
+```
+
+### Ports (Traits)
+
+Ports define what the domain needs, without knowing HOW it will be implemented:
+
+```rust
+// domain/ports/backend_repository.rs
+#[async_trait]
+pub trait BackendRepository: Send + Sync {
+    async fn get_all(&self) -> Vec<Backend>;
+    async fn get_by_id(&self, id: &str) -> Option<Backend>;
+    async fn get_healthy(&self) -> Vec<Backend>;
+}
+
+// domain/ports/geo_resolver.rs
+pub trait GeoResolver: Send + Sync {
+    fn resolve(&self, ip: IpAddr) -> Option<GeoInfo>;
+}
+
+// domain/ports/metrics_store.rs
+pub trait MetricsStore: Send + Sync {
+    fn get_connection_count(&self, backend_id: &str) -> usize;
+    fn increment_connections(&self, backend_id: &str);
+    fn decrement_connections(&self, backend_id: &str);
+    fn record_rtt(&self, backend_id: &str, rtt_ms: u64);
+}
+```
+
+### Adapters (Implementations)
+
+Adapters implement ports with specific technologies:
+
+```rust
+// adapters/outbound/sqlite_backend_repo.rs
+#[async_trait]
+impl BackendRepository for SqliteBackendRepository {
+    async fn get_healthy(&self) -> Vec<Backend> {
+        self.backends.read().await
+            .iter()
+            .filter(|b| b.healthy)
+            .cloned()
+            .collect()
+    }
+}
+
+// adapters/outbound/maxmind_geo_resolver.rs
+impl GeoResolver for MaxMindGeoResolver {
+    fn resolve(&self, ip: IpAddr) -> Option<GeoInfo> {
+        let resp: CountryResp = self.reader.lookup(ip).ok()?;
+        let iso = resp.country?.iso_code?;
+        let region = RegionCode::from_country(&iso);
+        Some(GeoInfo::new(iso, region))
+    }
+}
+```
+
+### Composition Root (main.rs)
+
+The `main.rs` is the only place that knows ALL concrete implementations:
+
+```rust
+// main.rs - Composition Root
+let backend_repo = Arc::new(SqliteBackendRepository::new());
+let binding_repo = Arc::new(DashMapBindingRepository::new());
+let geo_resolver = Arc::new(MaxMindGeoResolver::embedded()?);
+let metrics = Arc::new(DashMapMetricsStore::new());
+
+let proxy_service = Arc::new(ProxyService::new(
+    backend_repo,    // trait BackendRepository
+    binding_repo,    // trait BindingRepository
+    geo_resolver,    // trait GeoResolver
+    metrics,         // trait MetricsStore
+    RegionCode::from_str(&cfg.region),
+));
+
+let server = TcpServer::new(proxy_service, cfg.listen_addr);
+server.run().await
+```
+
+### Practical Benefits
+
+| Scenario | Without Hexagonal | With Hexagonal |
+|----------|-------------------|----------------|
+| Test LoadBalancer | Needs SQLite running | Simple mock of trait |
+| Switch SQLite→Postgres | Refactor all code | Create new adapter |
+| Add Redis cache | Modify state.rs | Create adapter implementing port |
+| Understand domain | Read mixed code | Just look at `domain/` |
+
 ## Core Components
 
 ### 1. Configuration (`config.rs`)
@@ -42,7 +227,7 @@ pub struct Config {
 }
 ```
 
-### 2. Routing Database (`db.rs`)
+### 2. Routing Database (`adapters/outbound/sqlite_backend_repo.rs`)
 
 SQLite database containing backend definitions:
 
@@ -51,6 +236,7 @@ CREATE TABLE backends (
     id TEXT PRIMARY KEY,      -- Unique backend identifier
     app TEXT,                 -- Application name
     region TEXT,              -- Geographic region (sa, us, eu)
+    country TEXT,             -- Country code (BR, US, FR)
     wg_ip TEXT,               -- WireGuard overlay IP
     port INTEGER,             -- Backend port
     healthy INTEGER,          -- Health status (0/1)
@@ -61,184 +247,104 @@ CREATE TABLE backends (
 );
 ```
 
-The database is reloaded periodically (default: 5 seconds) to pick up changes without restart:
+The database is reloaded periodically (default: 5 seconds) via a background Tokio task:
 
 ```rust
-pub async fn start_routing_sync_sqlite(
-    routing: Arc<RwLock<RoutingState>>,
-    db_path: String,
-    interval_secs: u64,
-) -> Result<()> {
-    loop {
-        // Load backends from SQLite
-        let new_state = load_routing_state_from_sqlite(&db_path)?;
-
-        // Atomic update
-        let mut guard = routing.write().await;
-        *guard = new_state;
-
-        sleep(Duration::from_secs(interval_secs)).await;
+impl SqliteBackendRepository {
+    pub fn start_sync(&self, db_path: String, interval_secs: u64) {
+        let backends = self.backends.clone();
+        tokio::spawn(async move {
+            loop {
+                let new_backends = Self::load_from_sqlite(&db_path)?;
+                *backends.write().await = new_backends;
+                sleep(Duration::from_secs(interval_secs)).await;
+            }
+        });
     }
 }
 ```
 
-### 3. Load Balancer (`lb.rs`)
+### 3. Load Balancer (`domain/services/load_balancer.rs`)
 
-The load balancer uses a scoring system to select the optimal backend:
+Pure function with NO external dependencies. Receives a closure to get connection counts:
+
+```rust
+impl LoadBalancer {
+    pub fn pick_backend<F>(
+        backends: &[Backend],
+        local_region: &RegionCode,
+        client_geo: Option<&GeoInfo>,
+        get_conn_count: F,  // Injected closure - doesn't know about DashMap
+    ) -> Option<Backend>
+    where
+        F: Fn(&str) -> usize,
+    {
+        // Pure scoring algorithm
+        // geo_score * 100 + (load_factor / weight)
+    }
+}
+```
+
+**Scoring:**
 
 ```
-score = region_score * 100 + (load_factor / weight)
+score = geo_score * 100 + (load_factor / weight)
 
 where:
-  region_score = 0 (client region matches backend)
-               = 1 (local POP region)
-               = 2 (fallback/other regions)
+  geo_score = 0 (same country as client - best)
+            = 1 (same region as client)
+            = 2 (same region as local POP)
+            = 3 (fallback - cross region)
 
   load_factor = current_connections / soft_limit
-
-  weight = configured backend weight (higher = preferred)
+  weight = backend weight (higher = preferred)
 ```
 
-**Algorithm:**
+### 4. Application Service (`application/proxy_service.rs`)
 
-1. Filter backends: `healthy = true` AND `connections < hard_limit`
-2. Calculate score for each backend
-3. Select backend with lowest score
+Orchestrates domain logic and coordinates adapters:
 
 ```rust
-pub fn pick_backend(
-    backends: &[Backend],
-    local_region: &str,
-    client_region: Option<&str>,
-    metrics: &DashMap<String, BackendMetrics>,
-) -> Option<Backend> {
-    let mut best: Option<(Backend, f64)> = None;
-
-    for b in backends {
-        if !b.healthy { continue; }
-
-        let conns = metrics.get(&b.id)
-            .map(|m| m.current_conns.load(Ordering::Relaxed))
-            .unwrap_or(0);
-
-        if conns >= b.hard_limit as u64 { continue; }
-
-        // Calculate region score
-        let region_score = match client_region {
-            Some(cr) if cr == b.region => 0,
-            _ if b.region == local_region => 1,
-            _ => 2,
-        };
-
-        // Calculate load factor
-        let load_factor = conns as f64 / b.soft_limit as f64;
-
-        // Final score (lower is better)
-        let score = (region_score * 100) as f64 + (load_factor / b.weight as f64);
-
-        // Update best if this is better
-        if best.is_none() || score < best.as_ref().unwrap().1 {
-            best = Some((b.clone(), score));
-        }
-    }
-
-    best.map(|(b, _)| b)
+pub struct ProxyService {
+    backend_repo: Arc<dyn BackendRepository>,
+    binding_repo: Arc<dyn BindingRepository>,
+    geo_resolver: Option<Arc<dyn GeoResolver>>,
+    metrics: Arc<dyn MetricsStore>,
+    local_region: RegionCode,
 }
-```
 
-### 4. Shared State (`state.rs`)
-
-Global state shared across all connections:
-
-```rust
-pub struct RcProxyState {
-    pub local_region: String,
-    pub routing: Arc<RwLock<RoutingState>>,
-    pub bindings: Arc<DashMap<ClientKey, Binding>>,
-    pub metrics: Arc<DashMap<String, BackendMetrics>>,
-    pub geo: Option<GeoDb>,
-}
-```
-
-**Key structures:**
-
-- `RoutingState`: Current backend list (refreshed periodically)
-- `DashMap<ClientKey, Binding>`: Lock-free client affinity map
-- `DashMap<String, BackendMetrics>`: Per-backend connection counts and RTT
-
-### 5. GeoIP Resolution (`state.rs`)
-
-Maps client IPs to regions using MaxMind GeoLite2:
-
-```rust
-impl GeoDb {
-    pub fn region_for_ip(&self, ip: IpAddr) -> Option<String> {
-        let country: geoip2::Country = self.reader.lookup(ip).ok()?;
-        let iso_code = country.country?.iso_code?;
-
-        // Map country to region
-        match iso_code {
-            "BR" | "AR" | "CL" | "PE" | "CO" => Some("sa".to_string()),
-            "US" | "CA" | "MX" => Some("us".to_string()),
-            "PT" | "ES" | "FR" | "DE" | "GB" => Some("eu".to_string()),
-            _ => Some("us".to_string()), // Default fallback
-        }
+impl ProxyService {
+    pub async fn resolve_backend(&self, client_ip: IpAddr) -> Option<Backend> {
+        // 1. Check existing binding
+        // 2. Resolve client geo
+        // 3. Call LoadBalancer with injected metrics closure
+        // 4. Create new binding
     }
 }
 ```
 
-### 6. TCP Proxy (`proxy.rs`)
+### 5. TCP Server (`adapters/inbound/tcp_server.rs`)
 
-The core proxy logic handles bidirectional TCP streaming:
+Inbound adapter that accepts connections and calls the application service:
 
 ```rust
-async fn handle_connection(
-    state: RcProxyState,
-    client_stream: TcpStream,
-    client_addr: SocketAddr,
-) -> Result<()> {
-    // 1. Check for existing binding (affinity)
-    let client_key = ClientKey { client_ip: client_addr.ip() };
+impl TcpServer {
+    pub async fn run(&self) -> anyhow::Result<()> {
+        let listener = TcpListener::bind(&self.listen_addr).await?;
 
-    // 2. Resolve backend
-    let backend = if let Some(binding) = state.bindings.get(&client_key) {
-        // Use existing binding
-        find_backend_by_id(&binding.backend_id)
-    } else {
-        // Pick new backend using load balancer
-        let client_region = state.geo.as_ref()
-            .and_then(|g| g.region_for_ip(client_addr.ip()));
-        pick_backend(&backends, &state.local_region, client_region.as_deref())
-    };
+        loop {
+            let (stream, addr) = listener.accept().await?;
+            let service = self.proxy_service.clone();
 
-    // 3. Connect to backend
-    let backend_stream = TcpStream::connect(&backend_addr).await?;
+            tokio::spawn(async move {
+                // Resolve backend via ProxyService
+                let backend = service.resolve_backend(addr.ip()).await?;
 
-    // 4. Update metrics
-    state.metrics.entry(backend.id.clone())
-        .or_insert_with(BackendMetrics::new)
-        .current_conns.fetch_add(1, Ordering::Relaxed);
-
-    // 5. Bidirectional copy with proper half-close handling
-    let (client_read, client_write) = client_stream.into_split();
-    let (backend_read, backend_write) = backend_stream.into_split();
-
-    let c2b = tokio::spawn(async move {
-        io::copy(&mut client_read, &mut backend_write).await?;
-        backend_write.shutdown().await
-    });
-
-    let b2c = tokio::spawn(async move {
-        io::copy(&mut backend_read, &mut client_write).await
-    });
-
-    tokio::join!(c2b, b2c);
-
-    // 6. Cleanup metrics
-    state.metrics.get(&backend.id)
-        .map(|m| m.current_conns.fetch_sub(1, Ordering::Relaxed));
-
-    Ok(())
+                // Connect to backend, record metrics
+                // Bidirectional TCP copy
+            });
+        }
+    }
 }
 ```
 
@@ -247,6 +353,19 @@ async fn handle_connection(
 The request flow shows the complete lifecycle of a TCP connection through edgeProxy:
 
 ![Request Flow](/img/request-flow.svg)
+
+```
+1. Client TCP connection arrives at TcpServer (inbound adapter)
+2. TcpServer calls ProxyService.resolve_backend()
+3. ProxyService checks BindingRepository for existing binding
+4. If no binding: ProxyService resolves geo via GeoResolver
+5. ProxyService calls LoadBalancer.pick_backend() with metrics closure
+6. LoadBalancer returns best backend (pure domain logic)
+7. ProxyService creates binding via BindingRepository
+8. TcpServer connects to backend, records metrics via MetricsStore
+9. Bidirectional TCP copy (L4 passthrough)
+10. On disconnect: TcpServer decrements connection count
+```
 
 ## Design Decisions
 
@@ -275,6 +394,13 @@ The request flow shows the complete lifecycle of a TCP connection through edgePr
 - **Performance**: Kernel-level encryption with minimal overhead
 - **Simplicity**: Point-to-point configuration
 
+### Why Hexagonal Architecture?
+
+- **Testability**: Domain logic can be tested without infrastructure
+- **Flexibility**: Easy to swap implementations (SQLite→PostgreSQL)
+- **Maintainability**: Clear separation of concerns
+- **Onboarding**: New developers can understand domain by reading `domain/` only
+
 ## Performance Considerations
 
 ### Connection Handling
@@ -293,6 +419,35 @@ The request flow shows the complete lifecycle of a TCP connection through edgePr
 
 - Horizontal: Deploy multiple edgeProxy instances behind DNS/Anycast
 - Vertical: Tokio scales to available CPU cores automatically
+
+## Adding New Adapters
+
+To add a new adapter (e.g., PostgreSQL for backends):
+
+1. Create `adapters/outbound/postgres_backend_repo.rs`
+2. Implement `BackendRepository` trait
+3. Update `main.rs` composition root to use new adapter
+
+```rust
+// adapters/outbound/postgres_backend_repo.rs
+pub struct PostgresBackendRepository {
+    pool: PgPool,
+}
+
+#[async_trait]
+impl BackendRepository for PostgresBackendRepository {
+    async fn get_healthy(&self) -> Vec<Backend> {
+        sqlx::query_as!(Backend, "SELECT * FROM backends WHERE healthy = true")
+            .fetch_all(&self.pool)
+            .await
+            .unwrap_or_default()
+    }
+}
+
+// main.rs - just change the composition
+let backend_repo = Arc::new(PostgresBackendRepository::new(pool));
+// rest of the code stays the same!
+```
 
 ## Next Steps
 

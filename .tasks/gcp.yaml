@@ -1,0 +1,208 @@
+version: '3'
+
+vars:
+  GCP_PROJECT: your-project-id
+  GCP_REGION: asia-east2      # Hong Kong
+  GCP_ZONE: asia-east2-a
+  MACHINE_TYPE: e2-micro      # Free tier eligible in some regions
+  IMAGE_FAMILY: ubuntu-2204-lts
+  IMAGE_PROJECT: ubuntu-os-cloud
+  INSTANCE_NAME: edgeproxy-pop-hkg
+
+tasks:
+  # ============================================
+  # GCP Credentials
+  # ============================================
+
+  check:
+    desc: Verify GCP credentials and config
+    cmds:
+      - gcloud config list
+      - echo ""
+      - gcloud auth list
+
+  login:
+    desc: Login to GCP
+    cmds:
+      - gcloud auth login
+
+  set-project:
+    desc: "Set GCP project. Usage: task gcp:set-project -- PROJECT_ID"
+    cmds:
+      - |
+        if [ -z "{{.CLI_ARGS}}" ]; then
+          echo "Usage: task gcp:set-project -- <project-id>"
+          exit 1
+        fi
+        gcloud config set project {{.CLI_ARGS}}
+
+  # ============================================
+  # Firewall Rules
+  # ============================================
+
+  firewall:create:
+    desc: Create firewall rules for edgeProxy
+    cmds:
+      - |
+        echo "Creating firewall rules..."
+
+        gcloud compute firewall-rules create edgeproxy-allow-ssh \
+          --allow tcp:22 \
+          --source-ranges 0.0.0.0/0 \
+          --target-tags edgeproxy \
+          --description "Allow SSH to edgeProxy"
+
+        gcloud compute firewall-rules create edgeproxy-allow-proxy \
+          --allow tcp:8080 \
+          --source-ranges 0.0.0.0/0 \
+          --target-tags edgeproxy \
+          --description "Allow edgeProxy TCP traffic"
+
+        gcloud compute firewall-rules create edgeproxy-allow-wireguard \
+          --allow udp:51820 \
+          --source-ranges 0.0.0.0/0 \
+          --target-tags edgeproxy \
+          --description "Allow WireGuard VPN"
+
+        echo "Firewall rules created"
+
+  firewall:list:
+    desc: List edgeProxy firewall rules
+    cmds:
+      - gcloud compute firewall-rules list --filter="name~edgeproxy"
+
+  firewall:delete:
+    desc: Delete edgeProxy firewall rules
+    cmds:
+      - gcloud compute firewall-rules delete edgeproxy-allow-ssh --quiet || true
+      - gcloud compute firewall-rules delete edgeproxy-allow-proxy --quiet || true
+      - gcloud compute firewall-rules delete edgeproxy-allow-wireguard --quiet || true
+      - echo "Firewall rules deleted"
+
+  # ============================================
+  # VM Instance
+  # ============================================
+
+  vm:create:
+    desc: Create VM instance for edgeProxy POP
+    cmds:
+      - |
+        gcloud compute instances create {{.INSTANCE_NAME}} \
+          --zone={{.GCP_ZONE}} \
+          --machine-type={{.MACHINE_TYPE}} \
+          --image-family={{.IMAGE_FAMILY}} \
+          --image-project={{.IMAGE_PROJECT}} \
+          --boot-disk-size=20GB \
+          --boot-disk-type=pd-standard \
+          --tags=edgeproxy
+
+        echo ""
+        echo "Instance created. Getting external IP..."
+        gcloud compute instances describe {{.INSTANCE_NAME}} \
+          --zone={{.GCP_ZONE}} \
+          --format='get(networkInterfaces[0].accessConfigs[0].natIP)'
+
+  vm:list:
+    desc: List VM instances
+    cmds:
+      - gcloud compute instances list --filter="name~edgeproxy"
+
+  vm:ssh:
+    desc: SSH into the VM
+    cmds:
+      - gcloud compute ssh {{.INSTANCE_NAME}} --zone={{.GCP_ZONE}}
+
+  vm:stop:
+    desc: Stop VM instance
+    cmds:
+      - gcloud compute instances stop {{.INSTANCE_NAME}} --zone={{.GCP_ZONE}}
+      - echo "Instance stopped"
+
+  vm:start:
+    desc: Start VM instance
+    cmds:
+      - gcloud compute instances start {{.INSTANCE_NAME}} --zone={{.GCP_ZONE}}
+      - echo "Instance started"
+
+  vm:delete:
+    desc: Delete VM instance
+    cmds:
+      - gcloud compute instances delete {{.INSTANCE_NAME}} --zone={{.GCP_ZONE}} --quiet
+      - echo "Instance deleted"
+
+  # ============================================
+  # Deploy edgeProxy to GCP VM
+  # ============================================
+
+  deploy:
+    desc: Deploy edgeProxy to GCP VM
+    deps: [build:release]
+    cmds:
+      - |
+        echo "Copying binary and routing.db to VM..."
+        gcloud compute scp target/release/edge-proxy {{.INSTANCE_NAME}}:/tmp/ --zone={{.GCP_ZONE}}
+        gcloud compute scp routing.db {{.INSTANCE_NAME}}:/tmp/ --zone={{.GCP_ZONE}}
+
+        echo "Setting up on VM..."
+        gcloud compute ssh {{.INSTANCE_NAME}} --zone={{.GCP_ZONE}} --command="
+          sudo mkdir -p /opt/edgeproxy
+          sudo mv /tmp/edge-proxy /opt/edgeproxy/
+          sudo mv /tmp/routing.db /opt/edgeproxy/
+          sudo chmod +x /opt/edgeproxy/edge-proxy
+        "
+        echo "Deploy complete. Create systemd service with: task gcp:service:create"
+
+  service:create:
+    desc: Create systemd service on GCP VM
+    cmds:
+      - |
+        gcloud compute ssh {{.INSTANCE_NAME}} --zone={{.GCP_ZONE}} --command="
+        cat | sudo tee /etc/systemd/system/edgeproxy.service << 'EOF'
+        [Unit]
+        Description=edgeProxy TCP Proxy
+        After=network.target
+
+        [Service]
+        Type=simple
+        User=root
+        WorkingDirectory=/opt/edgeproxy
+        Environment=EDGEPROXY_REGION=ap
+        Environment=EDGEPROXY_LISTEN_ADDR=0.0.0.0:8080
+        Environment=EDGEPROXY_DB_PATH=/opt/edgeproxy/routing.db
+        ExecStart=/opt/edgeproxy/edge-proxy
+        Restart=always
+        RestartSec=5
+
+        [Install]
+        WantedBy=multi-user.target
+        EOF
+
+        sudo systemctl daemon-reload
+        sudo systemctl enable edgeproxy
+        sudo systemctl start edgeproxy
+        sudo systemctl status edgeproxy
+        "
+
+  service:status:
+    desc: Check edgeProxy service status on VM
+    cmds:
+      - gcloud compute ssh {{.INSTANCE_NAME}} --zone={{.GCP_ZONE}} --command="sudo systemctl status edgeproxy"
+
+  service:logs:
+    desc: Show edgeProxy logs on VM
+    cmds:
+      - gcloud compute ssh {{.INSTANCE_NAME}} --zone={{.GCP_ZONE}} --command="sudo journalctl -u edgeproxy -n 50"
+
+  # ============================================
+  # WireGuard
+  # ============================================
+
+  wg:status:
+    desc: Check WireGuard status on VM
+    cmds:
+      - gcloud compute ssh {{.INSTANCE_NAME}} --zone={{.GCP_ZONE}} --command="sudo wg show"
+
+  wg:install:
+    desc: Install WireGuard on VM
+    cmds:
+      - gcloud compute ssh {{.INSTANCE_NAME}} --zone={{.GCP_ZONE}} --command="sudo apt-get update && sudo apt-get install -y wireguard"

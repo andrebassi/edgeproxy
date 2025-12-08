@@ -327,24 +327,241 @@ INSERT INTO backends VALUES
 | `eu` | Europe (Germany, France, UK, etc.) |
 | `ap` | Asia Pacific (Japan, Singapore, Australia) |
 
+## Hexagonal Architecture (Ports & Adapters)
+
+edgeProxy follows **Hexagonal Architecture** (also known as Ports & Adapters), which provides clear separation between business logic and infrastructure concerns.
+
+### Why Hexagonal Architecture?
+
+| Benefit | Description |
+|---------|-------------|
+| **Testability** | Domain logic tested with simple mocks, no real databases needed |
+| **Flexibility** | Swap implementations (SQLite → PostgreSQL) by creating new adapters |
+| **Clarity** | Business rules live in `domain/`, infrastructure in `adapters/` |
+| **Dependency Inversion** | Domain defines interfaces (traits), adapters implement them |
+
+### Layer Diagram
+
+```
+┌─────────────────────────────────────────────────────────────────────────┐
+│                          INBOUND ADAPTERS                               │
+│                        (driving / primary)                              │
+│  ┌───────────────────────────────────────────────────────────────────┐ │
+│  │  TcpServer - accepts TCP connections, delegates to ProxyService   │ │
+│  └───────────────────────────────────────────────────────────────────┘ │
+└─────────────────────────────────────────────────────────────────────────┘
+                                    │
+                                    ▼
+┌─────────────────────────────────────────────────────────────────────────┐
+│                            APPLICATION                                   │
+│                        (use cases / orchestration)                       │
+│  ┌───────────────────────────────────────────────────────────────────┐ │
+│  │  ProxyService - coordinates domain services and repositories       │ │
+│  │  • resolve_backend() - finds best backend for client               │ │
+│  │  • manage bindings - session affinity                              │ │
+│  │  • track metrics - connection counts                               │ │
+│  └───────────────────────────────────────────────────────────────────┘ │
+└─────────────────────────────────────────────────────────────────────────┘
+                                    │
+                                    ▼
+┌─────────────────────────────────────────────────────────────────────────┐
+│                              DOMAIN                                      │
+│                    (pure business logic - ZERO external dependencies)    │
+│                                                                          │
+│  ┌─────────────────┐  ┌─────────────────┐  ┌─────────────────────────┐ │
+│  │    Entities     │  │  Value Objects  │  │       Services          │ │
+│  │  • Backend      │  │  • RegionCode   │  │  • LoadBalancer         │ │
+│  │  • Binding      │  │  • BackendScore │  │    - pick_backend()     │ │
+│  │  • ClientKey    │  │                 │  │    - calculate_score()  │ │
+│  │  • GeoInfo      │  │                 │  │                         │ │
+│  └─────────────────┘  └─────────────────┘  └─────────────────────────┘ │
+│                                                                          │
+│  ┌───────────────────────────────────────────────────────────────────┐ │
+│  │                     PORTS (Traits/Interfaces)                      │ │
+│  │  • BackendRepository  - get backends from storage                  │ │
+│  │  • BindingRepository  - manage client-backend bindings             │ │
+│  │  • GeoResolver        - resolve IP to geographic info              │ │
+│  │  • MetricsStore       - track connection metrics                   │ │
+│  └───────────────────────────────────────────────────────────────────┘ │
+└─────────────────────────────────────────────────────────────────────────┘
+                                    ▲
+                                    │ implements
+┌─────────────────────────────────────────────────────────────────────────┐
+│                         OUTBOUND ADAPTERS                                │
+│                        (driven / secondary)                              │
+│                                                                          │
+│  ┌──────────────────────┐  ┌──────────────────────┐                    │
+│  │ SqliteBackendRepo    │  │ DashMapBindingRepo   │                    │
+│  │ impl BackendRepo     │  │ impl BindingRepo     │                    │
+│  └──────────────────────┘  └──────────────────────┘                    │
+│                                                                          │
+│  ┌──────────────────────┐  ┌──────────────────────┐                    │
+│  │ MaxMindGeoResolver   │  │ DashMapMetricsStore  │                    │
+│  │ impl GeoResolver     │  │ impl MetricsStore    │                    │
+│  └──────────────────────┘  └──────────────────────┘                    │
+└─────────────────────────────────────────────────────────────────────────┘
+```
+
+### Ports (Interfaces)
+
+Ports define what the domain needs, without specifying how:
+
+```rust
+// domain/ports/backend_repository.rs
+#[async_trait]
+pub trait BackendRepository: Send + Sync {
+    async fn get_all(&self) -> Vec<Backend>;
+    async fn get_by_id(&self, id: &str) -> Option<Backend>;
+    async fn get_healthy(&self) -> Vec<Backend>;
+    async fn get_version(&self) -> u64;
+}
+
+// domain/ports/binding_repository.rs
+#[async_trait]
+pub trait BindingRepository: Send + Sync {
+    async fn get(&self, key: &ClientKey) -> Option<Binding>;
+    async fn set(&self, key: ClientKey, binding: Binding);
+    async fn remove(&self, key: &ClientKey);
+    async fn touch(&self, key: &ClientKey);
+    async fn cleanup_expired(&self, ttl: Duration) -> usize;
+    async fn count(&self) -> usize;
+}
+
+// domain/ports/geo_resolver.rs
+pub trait GeoResolver: Send + Sync {
+    fn resolve(&self, ip: IpAddr) -> Option<GeoInfo>;
+}
+
+// domain/ports/metrics_store.rs
+pub trait MetricsStore: Send + Sync {
+    fn get_connection_count(&self, backend_id: &str) -> usize;
+    fn increment_connections(&self, backend_id: &str);
+    fn decrement_connections(&self, backend_id: &str);
+    fn record_rtt(&self, backend_id: &str, rtt_ms: u64);
+    fn get_last_rtt(&self, backend_id: &str) -> Option<u64>;
+}
+```
+
+### Composition Root (main.rs)
+
+The only place that knows all concrete implementations:
+
+```rust
+#[tokio::main]
+async fn main() -> Result<()> {
+    let cfg = Config::from_env()?;
+
+    // Create adapters (concrete implementations)
+    let backend_repo = Arc::new(SqliteBackendRepository::new(&cfg.db_path)?);
+    let binding_repo = Arc::new(DashMapBindingRepository::new());
+    let geo_resolver = Arc::new(MaxMindGeoResolver::embedded()?);
+    let metrics = Arc::new(DashMapMetricsStore::new());
+
+    // Create application service (uses trait objects)
+    let proxy_service = Arc::new(ProxyService::new(
+        backend_repo,    // impl BackendRepository
+        binding_repo,    // impl BindingRepository
+        geo_resolver,    // impl GeoResolver
+        metrics,         // impl MetricsStore
+        RegionCode::from_str(&cfg.region),
+    ));
+
+    // Create inbound adapter and run
+    let server = TcpServer::new(proxy_service, cfg.listen_addr);
+    server.run().await
+}
+```
+
+### Testing Benefits
+
+Domain logic tested with simple mocks (no real databases):
+
+```rust
+#[test]
+fn test_pick_backend_prefers_same_region() {
+    let backends = vec![
+        make_backend("us-1", RegionCode::NorthAmerica, true),
+        make_backend("sa-1", RegionCode::SouthAmerica, true),
+    ];
+
+    let client_geo = GeoInfo {
+        country: "BR".to_string(),
+        region: RegionCode::SouthAmerica,
+    };
+
+    // No real database or network needed!
+    let result = LoadBalancer::pick_backend(
+        &backends,
+        &RegionCode::NorthAmerica,
+        Some(&client_geo),
+        |_| 0,  // Simple mock: zero connections
+    );
+
+    assert_eq!(result.unwrap().id, "sa-1");
+}
+```
+
+### Extending the System
+
+To add a new storage backend (e.g., PostgreSQL):
+
+1. Create a new adapter:
+```rust
+// adapters/outbound/postgres_backend_repo.rs
+pub struct PostgresBackendRepository { pool: PgPool }
+
+#[async_trait]
+impl BackendRepository for PostgresBackendRepository {
+    async fn get_healthy(&self) -> Vec<Backend> {
+        sqlx::query_as("SELECT * FROM backends WHERE healthy = true")
+            .fetch_all(&self.pool).await.unwrap_or_default()
+    }
+}
+```
+
+2. Wire it in main.rs:
+```rust
+// Swap implementation - domain code unchanged!
+let backend_repo = Arc::new(PostgresBackendRepository::new(pool));
+```
+
 ## Project Structure
 
 ```
 edgeproxy/
-├── src/
-│   ├── main.rs         # Entry point
-│   ├── config.rs       # Environment configuration
-│   ├── model.rs        # Data structures
-│   ├── db.rs           # SQLite sync loop
-│   ├── lb.rs           # Load balancer algorithm
-│   ├── state.rs        # Shared state + GeoIP
-│   └── proxy.rs        # TCP proxy
+├── src/                             # Hexagonal Architecture
+│   ├── main.rs                      # Composition Root
+│   ├── config.rs                    # Environment configuration
+│   ├── domain/                      # CORE BUSINESS LOGIC (no external deps)
+│   │   ├── entities.rs              # Backend, Binding, ClientKey, GeoInfo
+│   │   ├── value_objects.rs         # RegionCode, BackendScore
+│   │   ├── ports/                   # INTERFACES (traits)
+│   │   │   ├── backend_repository.rs
+│   │   │   ├── binding_repository.rs
+│   │   │   ├── geo_resolver.rs
+│   │   │   └── metrics_store.rs
+│   │   └── services/
+│   │       └── load_balancer.rs     # Pure scoring algorithm
+│   ├── application/                 # USE CASES / ORCHESTRATION
+│   │   └── proxy_service.rs
+│   └── adapters/                    # INFRASTRUCTURE IMPLEMENTATIONS
+│       ├── inbound/
+│       │   └── tcp_server.rs        # TCP listener
+│       └── outbound/
+│           ├── sqlite_backend_repo.rs
+│           ├── dashmap_binding_repo.rs
+│           ├── dashmap_metrics_store.rs
+│           └── maxmind_geo_resolver.rs
 ├── sql/
 │   └── create_routing_db.sql
-├── assets/             # SVG diagrams
-├── docs/               # Docusaurus documentation
-├── docker/             # Docker configurations
-├── fly-backend/        # Mock backend for Fly.io
+├── assets/                          # SVG diagrams
+├── docs/                            # Docusaurus documentation
+├── docker/                          # Docker configurations
+├── .tasks/                          # Modular task files
+│   ├── build.yaml                   # Build & cross-compilation tasks
+│   ├── test.yaml                    # Test tasks
+│   ├── aws.yaml                     # AWS deployment
+│   └── gcp.yaml                     # GCP deployment
 ├── Cargo.toml
 ├── Taskfile.yaml
 └── README.md
@@ -377,18 +594,116 @@ See the full [Roadmap](https://docs.edgeproxy.io/roadmap) for details.
 
 ## Development
 
-### Build
+### Build & Cross-Compilation
 
 ```bash
-# Debug build
-cargo build
+# Native builds
+task build:release          # Optimized release build
+task build:build            # Debug build
 
-# Release build
-cargo build --release
+# Cross-compilation for deployment
+task build:linux            # Linux AMD64 (servers, containers)
+task build:linux-arm        # Linux ARM64 (Graviton, ARM servers)
+task build:macos            # macOS (native arch)
+task build:macos-universal  # macOS Universal (Intel + Apple Silicon)
+task build:all              # Linux AMD64 + macOS native
+task build:dist             # All platforms
 
-# Run tests
-cargo test
+# Setup cross-compilation targets
+task build:targets:setup    # Install all Rust targets
+task build:targets:list     # List installed targets
+
+# Output binaries in ./dist/
+# edge-proxy-linux-amd64
+# edge-proxy-linux-arm64
+# edge-proxy-darwin-arm64
+# edge-proxy-darwin-amd64
+# edge-proxy-darwin-universal
 ```
+
+### Cross-Compilation Setup (macOS)
+
+**IMPORTANT**: Use rustup for Rust, NOT Homebrew. Homebrew's Rust doesn't support cross-compilation.
+
+```bash
+# 1. Ensure Rust is via rustup
+brew uninstall rust 2>/dev/null || true
+curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh
+
+# 2. Install Linux linkers
+brew tap messense/macos-cross-toolchains
+brew install x86_64-unknown-linux-gnu
+
+# 3. Build for Linux
+task build:linux
+```
+
+### Testing
+
+```bash
+# Run all 102 unit tests
+cargo test
+
+# Run with output
+cargo test -- --nocapture
+
+# Run specific module tests
+cargo test domain::services::load_balancer
+cargo test adapters::outbound::dashmap_metrics_store
+```
+
+### Integration Testing with Mock Backend
+
+The `tests/mock-backend/` directory contains a Go HTTP server for end-to-end testing:
+
+```bash
+# Build mock server
+cd tests/mock-backend
+go build -o mock-backend main.go
+
+# Cross-compile for Linux (EC2 deployment)
+GOOS=linux GOARCH=amd64 go build -o mock-backend-linux-amd64 main.go
+
+# Run multiple mock backends
+./mock-backend -port 9001 -region eu -id mock-eu-1 &
+./mock-backend -port 9002 -region eu -id mock-eu-2 &
+./mock-backend -port 9003 -region us -id mock-us-1 &
+```
+
+#### Mock Backend Endpoints
+
+| Endpoint | Response |
+|----------|----------|
+| `/` | Text with backend info |
+| `/health` | `OK - {id} ({region})` |
+| `/api/info` | JSON with full details |
+| `/api/latency` | Minimal JSON for latency testing |
+
+#### Configure routing.db for Testing
+
+```sql
+INSERT INTO backends (id, app, region, wg_ip, port, healthy, weight, soft_limit, hard_limit)
+VALUES
+  ('mock-eu-1', 'test', 'eu', '127.0.0.1', 9001, 1, 2, 100, 150),
+  ('mock-eu-2', 'test', 'eu', '127.0.0.1', 9002, 1, 2, 100, 150),
+  ('mock-us-1', 'test', 'us', '127.0.0.1', 9003, 1, 2, 100, 150);
+```
+
+#### Backend Fields Reference
+
+| Field | Description |
+|-------|-------------|
+| `id` | Unique backend identifier |
+| `app` | Application name (groups backends) |
+| `region` | Geographic region: `eu`, `us`, `sa`, `ap` |
+| `wg_ip` | Backend IP (`127.0.0.1` for local, WireGuard IP for production) |
+| `port` | TCP port |
+| `healthy` | `1` = active, `0` = excluded from routing |
+| `weight` | Load balancing weight (higher = more traffic) |
+| `soft_limit` | Comfortable connection count |
+| `hard_limit` | Maximum connections (excluded when reached) |
+
+See [Testing Documentation](https://docs.edgeproxy.io/testing) for complete guide.
 
 ### Docker Development
 
@@ -413,6 +728,7 @@ Full documentation is available at [docs.edgeproxy.io](https://docs.edgeproxy.io
 - [Getting Started](https://docs.edgeproxy.io/getting-started)
 - [Architecture](https://docs.edgeproxy.io/architecture)
 - [Configuration](https://docs.edgeproxy.io/configuration)
+- [Testing](https://docs.edgeproxy.io/testing)
 - [Deployment](https://docs.edgeproxy.io/deployment/docker)
 - [WireGuard Setup](https://docs.edgeproxy.io/internals/wireguard)
 - [Internals](https://docs.edgeproxy.io/internals/load-balancer)

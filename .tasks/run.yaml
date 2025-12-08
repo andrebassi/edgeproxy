@@ -1,0 +1,41 @@
+version: '3'
+
+tasks:
+  default:
+    desc: Run in debug mode (default config)
+    deps: [build:build]
+    cmds:
+      - "{{.DEBUG_BIN}}"
+
+  release:
+    desc: Run release binary
+    deps: [build:release]
+    cmds:
+      - "{{.RELEASE_BIN}}"
+
+  sa:
+    desc: Run as South America POP
+    deps: [build:build]
+    env:
+      EDGEPROXY_REGION: sa
+      EDGEPROXY_LISTEN_ADDR: "0.0.0.0:8080"
+    cmds:
+      - "{{.DEBUG_BIN}}"
+
+  us:
+    desc: Run as US POP
+    deps: [build:build]
+    env:
+      EDGEPROXY_REGION: us
+      EDGEPROXY_LISTEN_ADDR: "0.0.0.0:8081"
+    cmds:
+      - "{{.DEBUG_BIN}}"
+
+  eu:
+    desc: Run as EU POP
+    deps: [build:build]
+    env:
+      EDGEPROXY_REGION: eu
+      EDGEPROXY_LISTEN_ADDR: "0.0.0.0:8082"
+    cmds:
+      - "{{.DEBUG_BIN}}"
