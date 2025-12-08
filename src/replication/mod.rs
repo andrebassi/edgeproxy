@@ -34,12 +34,12 @@
 //! agent.start().await?;
 //! ```
 
-mod config;
-mod types;
-mod gossip;
-mod sync;
-mod transport;
-mod agent;
+pub mod config;
+pub mod types;
+pub mod gossip;
+pub mod sync;
+pub mod transport;
+pub mod agent;
 
 pub use config::ReplicationConfig;
 pub use types::{Change, ChangeKind, ChangeSet, NodeId};

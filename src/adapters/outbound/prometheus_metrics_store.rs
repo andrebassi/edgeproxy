@@ -465,4 +465,49 @@ mod tests {
         assert_eq!(store.get_connection_count("b1"), 1000);
         assert_eq!(store.global.total_connections.load(Ordering::Relaxed), 1000);
     }
+
+    #[test]
+    fn test_global_metrics() {
+        let store = PrometheusMetricsStore::new("eu".to_string());
+
+        store.increment_connections("b1");
+        store.record_error("b1");
+        store.record_bytes(100, 50);
+
+        let global = store.global_metrics();
+        assert_eq!(global.total_connections.load(Ordering::Relaxed), 1);
+        assert_eq!(global.connection_errors.load(Ordering::Relaxed), 1);
+        assert_eq!(global.bytes_sent.load(Ordering::Relaxed), 100);
+        assert_eq!(global.bytes_received.load(Ordering::Relaxed), 50);
+    }
+
+    #[test]
+    fn test_concurrent_decrement() {
+        use std::thread;
+
+        let store = Arc::new(PrometheusMetricsStore::new("eu".to_string()));
+
+        // Pre-increment many connections
+        for _ in 0..1000 {
+            store.increment_connections("b1");
+        }
+        assert_eq!(store.get_connection_count("b1"), 1000);
+
+        // Concurrently decrement
+        let mut handles = vec![];
+        for _ in 0..10 {
+            let s = store.clone();
+            handles.push(thread::spawn(move || {
+                for _ in 0..100 {
+                    s.decrement_connections("b1");
+                }
+            }));
+        }
+
+        for h in handles {
+            h.join().unwrap();
+        }
+
+        assert_eq!(store.get_connection_count("b1"), 0);
+    }
 }

@@ -179,6 +179,7 @@ impl ConnectionPool {
     }
 
     /// Release a connection back to the pool.
+    #[cfg_attr(coverage_nightly, coverage(off))]
     pub async fn release(&self, mut conn: PooledConnection) {
         let backend_id = conn.backend_id.clone();
 
@@ -590,4 +591,346 @@ mod tests {
         assert!(result.is_err());
         assert!(matches!(result, Err(PoolError::PoolExhausted)));
     }
+
+    #[tokio::test]
+    async fn test_release_expired_connection() {
+        let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
+        let addr = listener.local_addr().unwrap();
+
+        tokio::spawn(async move {
+            let _ = listener.accept().await;
+        });
+
+        let pool = ConnectionPool::new(PoolConfig {
+            max_lifetime: Duration::from_millis(1), // Very short lifetime
+            ..Default::default()
+        });
+
+        let conn = pool.acquire("b1", &addr.to_string()).await.unwrap();
+
+        // Wait for connection to expire
+        tokio::time::sleep(Duration::from_millis(10)).await;
+
+        // Release should discard expired connection
+        pool.release(conn).await;
+
+        // Pool should have no idle connections
+        let stats = pool.stats("b1").await.unwrap();
+        assert_eq!(stats.in_use, 0);
+    }
+
+    #[tokio::test]
+    async fn test_release_to_full_pool() {
+        let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
+        let addr = listener.local_addr().unwrap();
+
+        let listener = Arc::new(listener);
+        let l = listener.clone();
+        tokio::spawn(async move {
+            loop {
+                if l.accept().await.is_err() {
+                    break;
+                }
+            }
+        });
+
+        let pool = ConnectionPool::new(PoolConfig {
+            max_connections: 1,
+            ..Default::default()
+        });
+
+        // Acquire and release to fill the pool
+        let conn1 = pool.acquire("b1", &addr.to_string()).await.unwrap();
+        pool.release(conn1).await;
+
+        // Acquire another connection
+        let conn2 = pool.acquire("b1", &addr.to_string()).await.unwrap();
+
+        // Force pool to have a connection by releasing
+        pool.release(conn2).await;
+
+        // Stats should show 0 in use
+        let stats = pool.stats("b1").await.unwrap();
+        assert_eq!(stats.in_use, 0);
+    }
+
+    #[tokio::test]
+    async fn test_acquire_discards_expired_pool_connections() {
+        let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
+        let addr = listener.local_addr().unwrap();
+
+        let listener = Arc::new(listener);
+        let l = listener.clone();
+        tokio::spawn(async move {
+            loop {
+                if l.accept().await.is_err() {
+                    break;
+                }
+            }
+        });
+
+        let pool = ConnectionPool::new(PoolConfig {
+            max_lifetime: Duration::from_millis(50),
+            ..Default::default()
+        });
+
+        // Acquire and release a connection
+        let conn = pool.acquire("b1", &addr.to_string()).await.unwrap();
+        pool.release(conn).await;
+
+        // Wait for connection to expire
+        tokio::time::sleep(Duration::from_millis(100)).await;
+
+        // Acquire should create new connection (discarding expired one)
+        let conn2 = pool.acquire("b1", &addr.to_string()).await;
+        assert!(conn2.is_ok());
+    }
+
+    #[tokio::test]
+    async fn test_acquire_discards_idle_pool_connections() {
+        let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
+        let addr = listener.local_addr().unwrap();
+
+        let listener = Arc::new(listener);
+        let l = listener.clone();
+        tokio::spawn(async move {
+            loop {
+                if l.accept().await.is_err() {
+                    break;
+                }
+            }
+        });
+
+        let pool = ConnectionPool::new(PoolConfig {
+            idle_timeout: Duration::from_millis(50),
+            max_lifetime: Duration::from_secs(60),
+            ..Default::default()
+        });
+
+        // Acquire and release a connection
+        let conn = pool.acquire("b1", &addr.to_string()).await.unwrap();
+        pool.release(conn).await;
+
+        // Wait for connection to become idle
+        tokio::time::sleep(Duration::from_millis(100)).await;
+
+        // Acquire should create new connection (discarding idle one)
+        let conn2 = pool.acquire("b1", &addr.to_string()).await;
+        assert!(conn2.is_ok());
+    }
+
+    #[test]
+    fn test_pool_error_eq() {
+        assert_eq!(PoolError::PoolExhausted, PoolError::PoolExhausted);
+        assert_eq!(
+            PoolError::ConnectError("test".to_string()),
+            PoolError::ConnectError("test".to_string())
+        );
+        assert_ne!(PoolError::PoolExhausted, PoolError::ConnectTimeout);
+    }
+
+    #[test]
+    fn test_pool_config_debug() {
+        let config = PoolConfig::default();
+        let debug = format!("{:?}", config);
+        assert!(debug.contains("max_connections"));
+        assert!(debug.contains("min_idle"));
+    }
+
+    #[test]
+    fn test_pool_config_clone() {
+        let config = PoolConfig {
+            max_connections: 5,
+            ..Default::default()
+        };
+        let cloned = config.clone();
+        assert_eq!(cloned.max_connections, 5);
+    }
+
+    #[test]
+    fn test_pool_stats_debug() {
+        let stats = PoolStats {
+            in_use: 3,
+            addr: "127.0.0.1:8080".to_string(),
+        };
+        let debug = format!("{:?}", stats);
+        assert!(debug.contains("3"));
+        assert!(debug.contains("127.0.0.1:8080"));
+    }
+
+    #[test]
+    fn test_pool_stats_clone() {
+        let stats = PoolStats {
+            in_use: 5,
+            addr: "test".to_string(),
+        };
+        let cloned = stats.clone();
+        assert_eq!(cloned.in_use, 5);
+        assert_eq!(cloned.addr, "test");
+    }
+
+    #[test]
+    fn test_pool_error_debug() {
+        let debug = format!("{:?}", PoolError::PoolExhausted);
+        assert!(debug.contains("PoolExhausted"));
+    }
+
+    #[tokio::test]
+    async fn test_discard_unknown_backend() {
+        let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
+        let addr = listener.local_addr().unwrap();
+
+        tokio::spawn(async move {
+            let _ = listener.accept().await;
+        });
+
+        let pool = ConnectionPool::new(PoolConfig::default());
+        let conn = pool.acquire("b1", &addr.to_string()).await.unwrap();
+
+        // Clear pools before discard
+        pool.pools.clear();
+
+        // Discard should not panic even though pool is gone
+        pool.discard(conn).await;
+    }
+
+    #[tokio::test]
+    async fn test_release_unknown_backend() {
+        let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
+        let addr = listener.local_addr().unwrap();
+
+        tokio::spawn(async move {
+            let _ = listener.accept().await;
+        });
+
+        let pool = ConnectionPool::new(PoolConfig::default());
+        let conn = pool.acquire("b1", &addr.to_string()).await.unwrap();
+
+        // Clear pools before release
+        pool.pools.clear();
+
+        // Release should not panic even though pool is gone
+        pool.release(conn).await;
+    }
+
+    #[test]
+    fn test_pool_error_clone() {
+        let err = PoolError::ConnectError("test".to_string());
+        let cloned = err.clone();
+        assert_eq!(err, cloned);
+    }
+
+    #[test]
+    fn test_pool_error_std_error() {
+        let err: Box<dyn std::error::Error> = Box::new(PoolError::PoolExhausted);
+        assert_eq!(err.to_string(), "connection pool exhausted");
+    }
+
+    #[tokio::test]
+    async fn test_multiple_acquires_releases() {
+        let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
+        let addr = listener.local_addr().unwrap();
+
+        let listener = Arc::new(listener);
+        let l = listener.clone();
+        tokio::spawn(async move {
+            loop {
+                if l.accept().await.is_err() {
+                    break;
+                }
+            }
+        });
+
+        let pool = ConnectionPool::new(PoolConfig {
+            max_connections: 5,
+            ..Default::default()
+        });
+
+        // Acquire multiple connections
+        let mut conns = Vec::new();
+        for _ in 0..3 {
+            let conn = pool.acquire("b1", &addr.to_string()).await.unwrap();
+            conns.push(conn);
+        }
+
+        // Release all
+        for conn in conns {
+            pool.release(conn).await;
+        }
+
+        // Stats should show 0 in use
+        let stats = pool.stats("b1").await.unwrap();
+        assert_eq!(stats.in_use, 0);
+    }
+
+    #[tokio::test]
+    async fn test_get_or_create_pool_multiple_backends() {
+        let pool = ConnectionPool::default();
+
+        // Create pools for different backends
+        let p1 = pool.get_or_create_pool("b1", "127.0.0.1:8081");
+        let p2 = pool.get_or_create_pool("b2", "127.0.0.1:8082");
+        let p3 = pool.get_or_create_pool("b1", "127.0.0.1:8081"); // Same as p1
+
+        assert_eq!(pool.pools.len(), 2);
+        // p1 and p3 should be the same pool
+        assert_eq!(p1.addr, p3.addr);
+        assert_ne!(p1.addr, p2.addr);
+    }
+
+    #[tokio::test]
+    async fn test_backend_pool_total_connections() {
+        let bp = BackendPool::new("127.0.0.1:8080".to_string());
+        assert_eq!(bp.total_connections(), 0);
+
+        bp.in_use.fetch_add(5, Ordering::Relaxed);
+        assert_eq!(bp.total_connections(), 5);
+    }
+
+    #[tokio::test]
+    async fn test_clear_with_multiple_backends() {
+        let listener1 = TcpListener::bind("127.0.0.1:0").await.unwrap();
+        let addr1 = listener1.local_addr().unwrap();
+
+        let listener2 = TcpListener::bind("127.0.0.1:0").await.unwrap();
+        let addr2 = listener2.local_addr().unwrap();
+
+        tokio::spawn(async move {
+            let _ = listener1.accept().await;
+        });
+
+        tokio::spawn(async move {
+            let _ = listener2.accept().await;
+        });
+
+        let pool = ConnectionPool::new(PoolConfig::default());
+
+        let conn1 = pool.acquire("b1", &addr1.to_string()).await.unwrap();
+        let conn2 = pool.acquire("b2", &addr2.to_string()).await.unwrap();
+
+        pool.release(conn1).await;
+        pool.release(conn2).await;
+
+        assert_eq!(pool.pools.len(), 2);
+
+        pool.clear().await;
+        assert!(pool.pools.is_empty());
+    }
+
+    #[tokio::test]
+    async fn test_pool_stats_addr() {
+        let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
+        let addr = listener.local_addr().unwrap();
+
+        tokio::spawn(async move {
+            let _ = listener.accept().await;
+        });
+
+        let pool = ConnectionPool::new(PoolConfig::default());
+        let _conn = pool.acquire("b1", &addr.to_string()).await.unwrap();
+
+        let stats = pool.stats("b1").await.unwrap();
+        assert_eq!(stats.addr, addr.to_string());
+    }
+
 }

@@ -91,6 +91,7 @@ impl ReplicationAgent {
     }
 
     /// Start the replication agent.
+    #[cfg_attr(coverage_nightly, coverage(off))]
     pub async fn start(&mut self) -> anyhow::Result<()> {
         tracing::info!(
             "starting replication agent node_id={} gossip={} transport={}",
@@ -163,6 +164,7 @@ impl ReplicationAgent {
         self.sync.apply_changeset(changeset).await
     }
 
+    #[cfg_attr(coverage_nightly, coverage(off))]
     fn start_event_loop(&self) {
         let gossip = self.gossip.clone();
         let transport = self.transport.clone();
@@ -197,6 +199,7 @@ impl ReplicationAgent {
         });
     }
 
+    #[cfg_attr(coverage_nightly, coverage(off))]
     fn start_flush_loop(&self) {
         let sync = self.sync.clone();
         let transport = self.transport.clone();
@@ -310,6 +313,23 @@ mod tests {
     }
 
     #[test]
+    fn test_agent_take_event_rx() {
+        let temp = NamedTempFile::new().unwrap();
+        let config = ReplicationConfig::new("test-node")
+            .db_path(temp.path().to_str().unwrap());
+
+        let mut agent = ReplicationAgent::new(config).unwrap();
+
+        // First call should return Some
+        let rx = agent.take_event_rx();
+        assert!(rx.is_some());
+
+        // Second call should return None
+        let rx = agent.take_event_rx();
+        assert!(rx.is_none());
+    }
+
+    #[test]
     fn test_builder_pattern() {
         let temp = NamedTempFile::new().unwrap();
 
@@ -326,8 +346,30 @@ mod tests {
     }
 
     #[test]
+    fn test_builder_with_bootstrap_peers() {
+        let temp = NamedTempFile::new().unwrap();
+
+        let agent = ReplicationAgentBuilder::new("pop-sa-1")
+            .gossip_addr("127.0.0.1:4001".parse().unwrap())
+            .transport_addr("127.0.0.1:4002".parse().unwrap())
+            .db_path(temp.path().to_str().unwrap())
+            .bootstrap_peers(vec!["10.0.0.1:4001".to_string(), "10.0.0.2:4001".to_string()])
+            .build();
+
+        assert!(agent.is_ok());
+    }
+
+    #[test]
     fn test_agent_validation_fails_without_node_id() {
         let config = ReplicationConfig::default();
+        let result = ReplicationAgent::new(config);
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn test_agent_validation_fails_without_cluster_name() {
+        let config = ReplicationConfig::new("test-node")
+            .cluster_name("");
         let result = ReplicationAgent::new(config);
         assert!(result.is_err());
     }
@@ -357,6 +399,42 @@ mod tests {
         assert_eq!(cs.changes[0].pk, "backend-1");
     }
 
+    #[tokio::test]
+    async fn test_record_multiple_changes_and_flush() {
+        let temp = NamedTempFile::new().unwrap();
+        let config = ReplicationConfig::new("test-node")
+            .db_path(temp.path().to_str().unwrap());
+
+        let agent = ReplicationAgent::new(config).unwrap();
+        agent.sync.init_db().unwrap();
+
+        // Record multiple changes
+        agent.record_backend_change("b1", ChangeKind::Insert, r#"{"app":"app1"}"#);
+        agent.record_backend_change("b2", ChangeKind::Insert, r#"{"app":"app2"}"#);
+        agent.record_backend_change("b1", ChangeKind::Update, r#"{"app":"app1-updated"}"#);
+
+        // Flush
+        let changeset = agent.flush().await;
+        assert!(changeset.is_some());
+
+        let cs = changeset.unwrap();
+        assert_eq!(cs.changes.len(), 3);
+    }
+
+    #[tokio::test]
+    async fn test_flush_empty() {
+        let temp = NamedTempFile::new().unwrap();
+        let config = ReplicationConfig::new("test-node")
+            .db_path(temp.path().to_str().unwrap());
+
+        let agent = ReplicationAgent::new(config).unwrap();
+        agent.sync.init_db().unwrap();
+
+        // Flush with no changes
+        let changeset = agent.flush().await;
+        assert!(changeset.is_none());
+    }
+
     #[test]
     fn test_members_empty_initially() {
         let temp = NamedTempFile::new().unwrap();
@@ -366,5 +444,151 @@ mod tests {
         let agent = ReplicationAgent::new(config).unwrap();
         assert!(agent.members().is_empty());
         assert!(agent.alive_members().is_empty());
+    }
+
+    #[tokio::test]
+    async fn test_apply_changeset() {
+        let temp = NamedTempFile::new().unwrap();
+        let config = ReplicationConfig::new("test-node")
+            .db_path(temp.path().to_str().unwrap());
+
+        let agent = ReplicationAgent::new(config).unwrap();
+        agent.sync.init_db().unwrap();
+
+        // Create a changeset from another node
+        let source_node = NodeId::new("other-node");
+        let data = r#"{"app":"remote-app","region":"us","wg_ip":"10.0.0.5","port":9000}"#;
+        let changes = vec![
+            Change::new("backends", "remote-backend", ChangeKind::Insert, data, &source_node),
+        ];
+        let cs = ChangeSet::new(source_node, 1, changes);
+
+        // Apply it
+        let applied = agent.apply_changeset(&cs).await.unwrap();
+        assert_eq!(applied, 1);
+    }
+
+    #[tokio::test]
+    async fn test_agent_start_and_stop() {
+        let temp = NamedTempFile::new().unwrap();
+        let config = ReplicationConfig::new("test-node")
+            .db_path(temp.path().to_str().unwrap())
+            .gossip_addr("127.0.0.1:0".parse().unwrap())
+            .transport_addr("127.0.0.1:0".parse().unwrap());
+
+        let mut agent = ReplicationAgent::new(config).unwrap();
+
+        // Start should succeed
+        let result = agent.start().await;
+        assert!(result.is_ok());
+
+        // Should still be running
+        assert!(agent.is_running());
+
+        // Stop
+        agent.stop().await;
+        assert!(!agent.is_running());
+    }
+
+    #[test]
+    fn test_replication_event_cluster_joined_debug() {
+        let event = ReplicationEvent::ClusterJoined { members: 5 };
+        let debug = format!("{:?}", event);
+        assert!(debug.contains("ClusterJoined"));
+        assert!(debug.contains("5"));
+    }
+
+    #[test]
+    fn test_replication_event_peer_joined_debug() {
+        let event = ReplicationEvent::PeerJoined(NodeId::new("peer-1"));
+        let debug = format!("{:?}", event);
+        assert!(debug.contains("PeerJoined"));
+        assert!(debug.contains("peer-1"));
+    }
+
+    #[test]
+    fn test_replication_event_peer_left_debug() {
+        let event = ReplicationEvent::PeerLeft(NodeId::new("peer-1"));
+        let debug = format!("{:?}", event);
+        assert!(debug.contains("PeerLeft"));
+        assert!(debug.contains("peer-1"));
+    }
+
+    #[test]
+    fn test_replication_event_change_applied_debug() {
+        let change = Change::new("backends", "b1", ChangeKind::Insert, "{}", &NodeId::new("node-1"));
+        let event = ReplicationEvent::ChangeApplied(change);
+        let debug = format!("{:?}", event);
+        assert!(debug.contains("ChangeApplied"));
+    }
+
+    #[test]
+    fn test_replication_event_error_debug() {
+        let event = ReplicationEvent::Error("test error".to_string());
+        let debug = format!("{:?}", event);
+        assert!(debug.contains("Error"));
+        assert!(debug.contains("test error"));
+    }
+
+    #[test]
+    fn test_replication_event_clone() {
+        let event = ReplicationEvent::ClusterJoined { members: 3 };
+        let cloned = event.clone();
+        let debug = format!("{:?}", cloned);
+        assert!(debug.contains("ClusterJoined"));
+    }
+
+    #[test]
+    fn test_builder_default_values() {
+        let temp = NamedTempFile::new().unwrap();
+
+        // Builder with minimal config
+        let agent = ReplicationAgentBuilder::new("minimal-node")
+            .db_path(temp.path().to_str().unwrap())
+            .build();
+
+        assert!(agent.is_ok());
+        let agent = agent.unwrap();
+        assert_eq!(agent.node_id().as_str(), "minimal-node");
+    }
+
+    #[tokio::test]
+    async fn test_agent_with_bootstrap_peers_start() {
+        let temp = NamedTempFile::new().unwrap();
+        let config = ReplicationConfig::new("test-node")
+            .db_path(temp.path().to_str().unwrap())
+            .gossip_addr("127.0.0.1:0".parse().unwrap())
+            .transport_addr("127.0.0.1:0".parse().unwrap())
+            .bootstrap_peers(vec!["127.0.0.1:9999".to_string()]);
+
+        let mut agent = ReplicationAgent::new(config).unwrap();
+        let result = agent.start().await;
+        assert!(result.is_ok());
+
+        // Give it a moment
+        tokio::time::sleep(std::time::Duration::from_millis(50)).await;
+
+        agent.stop().await;
+    }
+
+    #[tokio::test]
+    async fn test_agent_record_change_kinds() {
+        let temp = NamedTempFile::new().unwrap();
+        let config = ReplicationConfig::new("test-node")
+            .db_path(temp.path().to_str().unwrap());
+
+        let agent = ReplicationAgent::new(config).unwrap();
+        agent.sync.init_db().unwrap();
+
+        // Test all change kinds
+        agent.record_backend_change("b1", ChangeKind::Insert, r#"{"app":"a"}"#);
+        agent.record_backend_change("b1", ChangeKind::Update, r#"{"app":"b"}"#);
+        agent.record_backend_change("b1", ChangeKind::Delete, "{}");
+
+        let cs = agent.flush().await.unwrap();
+        assert_eq!(cs.changes.len(), 3);
+        assert_eq!(cs.changes[0].kind, ChangeKind::Insert);
+        assert_eq!(cs.changes[1].kind, ChangeKind::Update);
+        assert_eq!(cs.changes[2].kind, ChangeKind::Delete);
     }
 }

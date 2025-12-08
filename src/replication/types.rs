@@ -344,4 +344,260 @@ mod tests {
             _ => panic!("wrong message type"),
         }
     }
+
+    #[test]
+    fn test_hlc_timestamp_default() {
+        let ts = HLCTimestamp::default();
+        assert_eq!(ts.wall_time, 0);
+        assert_eq!(ts.counter, 0);
+        assert_eq!(ts.node_hash, 0);
+    }
+
+    #[test]
+    fn test_hlc_timestamp_eq() {
+        let ts1 = HLCTimestamp { wall_time: 100, counter: 1, node_hash: 42 };
+        let ts2 = HLCTimestamp { wall_time: 100, counter: 1, node_hash: 42 };
+        let ts3 = HLCTimestamp { wall_time: 101, counter: 1, node_hash: 42 };
+
+        assert_eq!(ts1, ts2);
+        assert_ne!(ts1, ts3);
+    }
+
+    #[test]
+    fn test_hlc_tick_with_older_other() {
+        let node = NodeId::new("node-1");
+        let old_ts = HLCTimestamp { wall_time: 1000, counter: 5, node_hash: 42 };
+        let current = HLCTimestamp::now(&node);
+
+        // Current should have higher wall_time than the old timestamp
+        let ticked = current.tick(Some(&old_ts), &node);
+
+        // Ticked should be greater than both
+        assert!(ticked > current);
+        assert!(ticked > old_ts);
+    }
+
+    #[test]
+    fn test_hlc_tick_same_wall_time_both() {
+        let node = NodeId::new("node-1");
+        // Use a very large wall time to simulate future time
+        let wall = u64::MAX - 1000;
+        let ts1 = HLCTimestamp { wall_time: wall, counter: 5, node_hash: 42 };
+        let ts2 = HLCTimestamp { wall_time: wall, counter: 3, node_hash: 43 };
+
+        // When both have same wall_time (future), counter should be max + 1
+        let result = ts1.tick(Some(&ts2), &node);
+        // Counter should be max(5, 3) + 1 = 6
+        assert_eq!(result.counter, 6);
+        assert_eq!(result.wall_time, wall);
+    }
+
+    #[test]
+    fn test_node_id_from_owned_string() {
+        let s = String::from("node-test");
+        let id: NodeId = s.clone().into();
+        assert_eq!(id.as_str(), "node-test");
+    }
+
+    #[test]
+    fn test_node_id_eq_hash() {
+        use std::collections::HashSet;
+
+        let id1 = NodeId::new("node-1");
+        let id2 = NodeId::new("node-1");
+        let id3 = NodeId::new("node-2");
+
+        assert_eq!(id1, id2);
+        assert_ne!(id1, id3);
+
+        let mut set = HashSet::new();
+        set.insert(id1.clone());
+        assert!(set.contains(&id2));
+        assert!(!set.contains(&id3));
+    }
+
+    #[test]
+    fn test_change_kind_clone() {
+        let kind = ChangeKind::Insert;
+        let cloned = kind.clone();
+        assert_eq!(kind, cloned);
+    }
+
+    #[test]
+    fn test_change_kind_variants() {
+        assert_ne!(ChangeKind::Insert, ChangeKind::Update);
+        assert_ne!(ChangeKind::Update, ChangeKind::Delete);
+        assert_ne!(ChangeKind::Delete, ChangeKind::Insert);
+    }
+
+    #[test]
+    fn test_change_clone() {
+        let node = NodeId::new("node-1");
+        let change = Change::new("backends", "pk1", ChangeKind::Insert, "{}", &node);
+        let cloned = change.clone();
+
+        assert_eq!(change.table, cloned.table);
+        assert_eq!(change.pk, cloned.pk);
+    }
+
+    #[test]
+    fn test_change_delete() {
+        let node = NodeId::new("node-1");
+        let change = Change::new("backends", "pk1", ChangeKind::Delete, "{}", &node);
+        assert_eq!(change.kind, ChangeKind::Delete);
+    }
+
+    #[test]
+    fn test_changeset_clone() {
+        let node = NodeId::new("node-1");
+        let cs = ChangeSet::new(node, 1, vec![]);
+        let cloned = cs.clone();
+
+        assert_eq!(cs.seq, cloned.seq);
+        assert_eq!(cs.checksum, cloned.checksum);
+    }
+
+    #[test]
+    fn test_changeset_empty() {
+        let node = NodeId::new("node-1");
+        let cs = ChangeSet::new(node, 0, vec![]);
+
+        assert!(cs.verify());
+        assert_eq!(cs.changes.len(), 0);
+    }
+
+    #[test]
+    fn test_message_sync_request() {
+        let msg = Message::SyncRequest { from_seq: 100, table: Some("backends".to_string()) };
+
+        let bytes = bincode::serialize(&msg).unwrap();
+        let decoded: Message = bincode::deserialize(&bytes).unwrap();
+
+        match decoded {
+            Message::SyncRequest { from_seq, table } => {
+                assert_eq!(from_seq, 100);
+                assert_eq!(table, Some("backends".to_string()));
+            }
+            _ => panic!("wrong message type"),
+        }
+    }
+
+    #[test]
+    fn test_message_sync_response() {
+        let node = NodeId::new("node-1");
+        let cs = ChangeSet::new(node, 1, vec![]);
+        let msg = Message::SyncResponse(vec![cs]);
+
+        let bytes = bincode::serialize(&msg).unwrap();
+        let decoded: Message = bincode::deserialize(&bytes).unwrap();
+
+        match decoded {
+            Message::SyncResponse(sets) => assert_eq!(sets.len(), 1),
+            _ => panic!("wrong message type"),
+        }
+    }
+
+    #[test]
+    fn test_message_ack() {
+        let node = NodeId::new("node-1");
+        let msg = Message::Ack { source: node, seq: 42 };
+
+        let bytes = bincode::serialize(&msg).unwrap();
+        let decoded: Message = bincode::deserialize(&bytes).unwrap();
+
+        match decoded {
+            Message::Ack { source, seq } => {
+                assert_eq!(source.as_str(), "node-1");
+                assert_eq!(seq, 42);
+            }
+            _ => panic!("wrong message type"),
+        }
+    }
+
+    #[test]
+    fn test_message_ping_pong() {
+        let ping = Message::Ping;
+        let pong = Message::Pong;
+
+        let ping_bytes = bincode::serialize(&ping).unwrap();
+        let pong_bytes = bincode::serialize(&pong).unwrap();
+
+        let decoded_ping: Message = bincode::deserialize(&ping_bytes).unwrap();
+        let decoded_pong: Message = bincode::deserialize(&pong_bytes).unwrap();
+
+        assert!(matches!(decoded_ping, Message::Ping));
+        assert!(matches!(decoded_pong, Message::Pong));
+    }
+
+    #[test]
+    fn test_change_has_id() {
+        let node = NodeId::new("node-1");
+        let c1 = Change::new("backends", "pk1", ChangeKind::Insert, "{}", &node);
+
+        // Change should have a non-zero ID
+        assert!(c1.id > 0);
+    }
+
+    #[test]
+    fn test_changeset_with_multiple_changes() {
+        let node = NodeId::new("node-1");
+        let changes = vec![
+            Change::new("backends", "pk1", ChangeKind::Insert, "{}", &node),
+            Change::new("backends", "pk2", ChangeKind::Update, "{}", &node),
+            Change::new("backends", "pk3", ChangeKind::Delete, "{}", &node),
+        ];
+
+        let cs = ChangeSet::new(node, 1, changes);
+        assert!(cs.verify());
+        assert_eq!(cs.changes.len(), 3);
+    }
+
+    #[test]
+    fn test_hlc_tick_counter_reset_on_new_wall_time() {
+        let node = NodeId::new("node-1");
+        // Create a timestamp in the past
+        let old_ts = HLCTimestamp {
+            wall_time: 1,
+            counter: 100,
+            node_hash: 42,
+        };
+
+        // Tick with current time (which will be much higher)
+        let new_ts = old_ts.tick(None, &node);
+
+        // Counter should reset because wall_time increased
+        assert!(new_ts.wall_time > old_ts.wall_time);
+    }
+
+    #[test]
+    fn test_hlc_tick_other_has_higher_wall_time() {
+        let node = NodeId::new("node-1");
+        // Use far future wall_time so it beats current time
+        let far_future = u64::MAX - 100;
+
+        // Self has lower wall_time, other has higher
+        let self_ts = HLCTimestamp { wall_time: 1000, counter: 5, node_hash: 42 };
+        let other_ts = HLCTimestamp { wall_time: far_future, counter: 10, node_hash: 43 };
+
+        // Tick: other.wall_time is max, so result.counter should be other.counter + 1
+        let result = self_ts.tick(Some(&other_ts), &node);
+
+        assert_eq!(result.wall_time, far_future);
+        assert_eq!(result.counter, 11); // other.counter + 1
+    }
+
+    #[test]
+    fn test_hlc_tick_none_self_wall_time_is_max() {
+        let node = NodeId::new("node-1");
+        // Use far future wall_time so it beats current time
+        let far_future = u64::MAX - 100;
+
+        let self_ts = HLCTimestamp { wall_time: far_future, counter: 7, node_hash: 42 };
+
+        // Tick without other: self.wall_time is max (> now)
+        let result = self_ts.tick(None, &node);
+
+        assert_eq!(result.wall_time, far_future);
+        assert_eq!(result.counter, 8); // self.counter + 1
+    }
 }

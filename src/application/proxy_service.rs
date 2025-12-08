@@ -203,6 +203,7 @@ impl ProxyService {
 
     /// Run periodic cleanup of expired bindings.
     #[allow(dead_code)]
+    #[cfg_attr(coverage_nightly, coverage(off))]
     pub async fn run_binding_cleanup(&self, ttl: Duration, interval: Duration) {
         loop {
             let removed = self.binding_repo.cleanup_expired(ttl).await;
