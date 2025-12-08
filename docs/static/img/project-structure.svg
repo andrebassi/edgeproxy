@@ -1,0 +1,156 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 700 840">
+  <defs>
+    <style>
+      .folder { fill: #fbbf24; }
+      .file { fill: #60a5fa; }
+      .text { font-family: ui-monospace, monospace; font-size: 12px; fill: #1e293b; }
+      .comment { font-family: ui-monospace, monospace; font-size: 10px; fill: #64748b; }
+      .layer-label { font-family: system-ui, sans-serif; font-size: 10px; font-weight: bold; fill: #475569; }
+    </style>
+  </defs>
+
+  <!-- White background -->
+  <rect width="100%" height="100%" fill="white"/>
+
+  <!-- Title -->
+  <text x="350" y="25" text-anchor="middle" font-family="system-ui, sans-serif" font-size="16" font-weight="bold" fill="#1e293b">edgeProxy - Hexagonal Architecture</text>
+
+  <!-- Root -->
+  <rect x="20" y="45" width="14" height="14" rx="2" class="folder"/>
+  <text x="40" y="56" class="text" font-weight="bold">edgeproxy/</text>
+
+  <!-- Level 1 files -->
+  <rect x="40" y="68" width="12" height="12" rx="2" class="file"/>
+  <text x="58" y="78" class="text">Cargo.toml</text>
+  <text x="180" y="78" class="comment"># Rust dependencies</text>
+
+  <rect x="40" y="85" width="12" height="12" rx="2" class="file"/>
+  <text x="58" y="95" class="text">Taskfile.yaml</text>
+  <text x="180" y="95" class="comment"># Task automation</text>
+
+  <rect x="40" y="102" width="12" height="12" rx="2" class="file"/>
+  <text x="58" y="112" class="text">routing.db</text>
+  <text x="180" y="112" class="comment"># SQLite routing database</text>
+
+  <!-- sql/ -->
+  <rect x="40" y="128" width="14" height="14" rx="2" class="folder"/>
+  <text x="60" y="139" class="text">sql/</text>
+  <rect x="60" y="148" width="12" height="12" rx="2" class="file"/>
+  <text x="78" y="158" class="text">create_routing_db.sql</text>
+  <text x="250" y="158" class="comment"># Schema + seed data</text>
+
+  <!-- src/ -->
+  <rect x="40" y="178" width="14" height="14" rx="2" class="folder"/>
+  <text x="60" y="189" class="text" font-weight="bold">src/</text>
+
+  <rect x="60" y="198" width="12" height="12" rx="2" class="file"/>
+  <text x="78" y="208" class="text">main.rs</text>
+  <text x="180" y="208" class="comment"># Composition root</text>
+
+  <rect x="60" y="215" width="12" height="12" rx="2" class="file"/>
+  <text x="78" y="225" class="text">config.rs</text>
+  <text x="180" y="225" class="comment"># Configuration loading</text>
+
+  <!-- Domain -->
+  <text x="60" y="250" class="layer-label">DOMAIN</text>
+  <rect x="60" y="258" width="14" height="14" rx="2" class="folder"/>
+  <text x="80" y="269" class="text">domain/</text>
+  <text x="180" y="269" class="comment"># Core business logic (no external deps)</text>
+
+  <rect x="80" y="278" width="12" height="12" rx="2" class="file"/>
+  <text x="98" y="288" class="text">entities.rs</text>
+  <text x="220" y="288" class="comment"># Backend, Binding, ClientKey</text>
+
+  <rect x="80" y="295" width="12" height="12" rx="2" class="file"/>
+  <text x="98" y="305" class="text">value_objects.rs</text>
+  <text x="220" y="305" class="comment"># RegionCode, BackendScore</text>
+
+  <rect x="80" y="315" width="14" height="14" rx="2" class="folder"/>
+  <text x="100" y="326" class="text">ports/</text>
+  <text x="180" y="326" class="comment"># Interfaces (traits)</text>
+
+  <rect x="100" y="335" width="12" height="12" rx="2" class="file"/>
+  <text x="118" y="345" class="text">backend_repository.rs</text>
+
+  <rect x="100" y="352" width="12" height="12" rx="2" class="file"/>
+  <text x="118" y="362" class="text">binding_repository.rs</text>
+
+  <rect x="100" y="369" width="12" height="12" rx="2" class="file"/>
+  <text x="118" y="379" class="text">geo_resolver.rs</text>
+
+  <rect x="100" y="386" width="12" height="12" rx="2" class="file"/>
+  <text x="118" y="396" class="text">metrics_store.rs</text>
+
+  <rect x="80" y="413" width="14" height="14" rx="2" class="folder"/>
+  <text x="100" y="424" class="text">services/</text>
+
+  <rect x="100" y="433" width="12" height="12" rx="2" class="file"/>
+  <text x="118" y="443" class="text">load_balancer.rs</text>
+  <text x="260" y="443" class="comment"># Scoring algorithm (pure)</text>
+
+  <!-- Application -->
+  <text x="60" y="468" class="layer-label">APPLICATION</text>
+  <rect x="60" y="476" width="14" height="14" rx="2" class="folder"/>
+  <text x="80" y="487" class="text">application/</text>
+  <text x="180" y="487" class="comment"># Use cases / orchestration</text>
+
+  <rect x="80" y="496" width="12" height="12" rx="2" class="file"/>
+  <text x="98" y="506" class="text">proxy_service.rs</text>
+
+  <!-- Adapters -->
+  <text x="60" y="531" class="layer-label">ADAPTERS</text>
+  <rect x="60" y="539" width="14" height="14" rx="2" class="folder"/>
+  <text x="80" y="550" class="text">adapters/</text>
+  <text x="180" y="550" class="comment"># Infrastructure implementations</text>
+
+  <!-- Inbound -->
+  <rect x="80" y="562" width="14" height="14" rx="2" class="folder"/>
+  <text x="100" y="573" class="text">inbound/</text>
+
+  <rect x="100" y="582" width="12" height="12" rx="2" class="file"/>
+  <text x="118" y="592" class="text">tcp_server.rs</text>
+  <text x="260" y="592" class="comment"># TCP (8080)</text>
+
+  <rect x="100" y="599" width="12" height="12" rx="2" class="file"/>
+  <text x="118" y="609" class="text">tls_server.rs</text>
+  <text x="260" y="609" class="comment"># TLS (8443)</text>
+
+  <rect x="100" y="616" width="12" height="12" rx="2" class="file"/>
+  <text x="118" y="626" class="text">api_server.rs</text>
+  <text x="260" y="626" class="comment"># API (8081)</text>
+
+  <rect x="100" y="633" width="12" height="12" rx="2" class="file"/>
+  <text x="118" y="643" class="text">dns_server.rs</text>
+  <text x="260" y="643" class="comment"># DNS (5353)</text>
+
+  <!-- Outbound -->
+  <rect x="80" y="658" width="14" height="14" rx="2" class="folder"/>
+  <text x="100" y="669" class="text">outbound/</text>
+
+  <rect x="100" y="678" width="12" height="12" rx="2" class="file"/>
+  <text x="118" y="688" class="text">sqlite_backend_repo.rs</text>
+  <text x="300" y="688" class="comment"># Local SQLite</text>
+
+  <rect x="100" y="695" width="12" height="12" rx="2" class="file"/>
+  <text x="118" y="705" class="text">corrosion_backend_repo.rs</text>
+  <text x="300" y="705" class="comment"># Distributed SQLite</text>
+
+  <rect x="100" y="712" width="12" height="12" rx="2" class="file"/>
+  <text x="118" y="722" class="text">dashmap_binding_repo.rs</text>
+  <text x="300" y="722" class="comment"># Client bindings</text>
+
+  <rect x="100" y="729" width="12" height="12" rx="2" class="file"/>
+  <text x="118" y="739" class="text">maxmind_geo_resolver.rs</text>
+  <text x="300" y="739" class="comment"># GeoIP resolution</text>
+
+  <rect x="100" y="746" width="12" height="12" rx="2" class="file"/>
+  <text x="118" y="756" class="text">prometheus_metrics_store.rs</text>
+  <text x="300" y="756" class="comment"># Prometheus metrics</text>
+
+  <!-- Infrastructure -->
+  <text x="60" y="781" class="layer-label">INFRASTRUCTURE</text>
+  <rect x="60" y="789" width="14" height="14" rx="2" class="folder"/>
+  <text x="80" y="800" class="text">infrastructure/</text>
+  <text x="200" y="800" class="comment"># Production components: shutdown, rate limit,</text>
+  <text x="200" y="812" class="comment"># circuit breaker, health, pool, hot reload</text>
+</svg>

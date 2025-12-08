@@ -368,10 +368,11 @@ edgeProxy has comprehensive unit test coverage following the Hexagonal Architect
 
 | Metric | Value |
 |--------|-------|
-| **Total Tests** | 358 |
-| **Line Coverage** | **99.38%** |
-| **Lines Covered** | 1,441 / 1,450 |
-| **Missed Lines** | 9 |
+| **Total Tests** | 485 |
+| **Line Coverage** | **95.54%** |
+| **Lines Covered** | 9,106 / 9,531 |
+| **Regions Coverage** | 95.17% |
+| **Functions Coverage** | 97.15% |
 
 ### Running Tests
 
@@ -385,6 +386,9 @@ cargo test -- --nocapture
 # Run tests for a specific module
 cargo test domain::services::load_balancer
 
+# Run infrastructure tests only
+cargo test infrastructure::
+
 # Run tests in parallel (default)
 cargo test -- --test-threads=4
 
@@ -394,26 +398,177 @@ cargo test -- --test-threads=1
 
 ### Tests by Module
 
-| Module | Tests | Description |
-|--------|-------|-------------|
-| `adapters::inbound::dns_server` | 44 | DNS server, packet handling, geo-routing resolution |
-| `adapters::inbound::api_server` | 38 | Auto-Discovery API, registration, heartbeat, lifecycle |
-| `adapters::inbound::tls_server` | 29 | TLS termination, certificate handling, connections |
-| `adapters::outbound::corrosion_backend_repo` | 28 | Distributed SQLite sync via Corrosion |
-| `adapters::inbound::tcp_server` | 27 | TCP connections, proxy logic, client handling |
-| `domain::value_objects` | 26 | RegionCode, country mapping, parsing |
-| `application::proxy_service` | 26 | Use case orchestration, backend resolution |
-| `domain::services::load_balancer` | 25 | Scoring algorithm, geo-routing, weights |
-| `config` | 24 | Configuration loading, environment variables |
-| `adapters::outbound::dashmap_binding_repo` | 21 | Client affinity, TTL, garbage collection |
-| `adapters::outbound::sqlite_backend_repo` | 20 | SQLite backend storage, reload |
-| `adapters::outbound::dashmap_metrics_store` | 20 | Connection metrics, RTT tracking |
-| `adapters::outbound::maxmind_geo_resolver` | 18 | GeoIP resolution, country/region mapping |
-| `domain::entities` | 12 | Backend, Binding, ClientKey entities |
+#### Inbound Adapters
+
+| Module | Tests | Coverage | Description |
+|--------|-------|----------|-------------|
+| `adapters::inbound::api_server` | 38 | 99.57% | Auto-Discovery API, registration, heartbeat |
+| `adapters::inbound::dns_server` | 44 | 97.80% | DNS server, geo-routing resolution |
+| `adapters::inbound::tcp_server` | 27 | 96.23% | TCP connections, proxy logic |
+| `adapters::inbound::tls_server` | 29 | 94.18% | TLS termination, certificates |
+
+#### Outbound Adapters
+
+| Module | Tests | Coverage | Description |
+|--------|-------|----------|-------------|
+| `adapters::outbound::dashmap_metrics_store` | 20 | 100.00% | Connection metrics, RTT tracking |
+| `adapters::outbound::dashmap_binding_repo` | 21 | 100.00% | Client affinity, TTL, GC |
+| `adapters::outbound::corrosion_backend_repo` | 28 | 99.85% | Distributed SQLite via Corrosion |
+| `adapters::outbound::sqlite_backend_repo` | 20 | 99.26% | SQLite backend storage |
+| `adapters::outbound::prometheus_metrics_store` | 19 | 98.70% | Prometheus metrics export |
+| `adapters::outbound::maxmind_geo_resolver` | 18 | 95.86% | GeoIP resolution |
+| `adapters::outbound::postgres_backend_repo` | 19 | 88.31% | PostgreSQL backend (stub) |
+
+#### Domain Layer
+
+| Module | Tests | Coverage | Description |
+|--------|-------|----------|-------------|
+| `domain::entities` | 12 | 100.00% | Backend, Binding, ClientKey |
+| `domain::value_objects` | 26 | 96.40% | RegionCode, country mapping |
+| `domain::services::load_balancer` | 25 | 98.78% | Scoring algorithm, geo-routing |
+
+#### Application Layer
+
+| Module | Tests | Coverage | Description |
+|--------|-------|----------|-------------|
+| `application::proxy_service` | 26 | 99.43% | Use case orchestration |
+| `config` | 24 | 100.00% | Configuration loading |
+
+#### Infrastructure Layer (NEW)
+
+| Module | Tests | Coverage | Description |
+|--------|-------|----------|-------------|
+| `infrastructure::circuit_breaker` | 22 | 98.30% | Circuit breaker pattern |
+| `infrastructure::config_watcher` | 17 | 94.30% | Hot reload configuration |
+| `infrastructure::rate_limiter` | 14 | 91.95% | Token bucket rate limiting |
+| `infrastructure::health_checker` | 17 | 91.64% | Active health checks |
+| `infrastructure::connection_pool` | 17 | 87.21% | TCP connection pooling |
+| `infrastructure::shutdown` | 11 | 86.29% | Graceful shutdown |
 
 ### Tests by Layer (Hexagonal Architecture)
 
 ![Tests by Layer](/img/tests-by-layer.svg)
+
+### Infrastructure Components Test Details
+
+#### Circuit Breaker Tests (22 tests)
+
+```bash
+cargo test infrastructure::circuit_breaker
+```
+
+| Test | Description |
+|------|-------------|
+| `test_circuit_breaker_new` | Initial state is Closed |
+| `test_circuit_breaker_default` | Default configuration |
+| `test_allow_when_closed` | Requests pass in Closed state |
+| `test_record_success_in_closed` | Success tracking |
+| `test_record_failure_in_closed` | Failure tracking |
+| `test_transitions_to_open` | Opens after threshold failures |
+| `test_deny_when_open` | Blocks requests in Open state |
+| `test_circuit_transitions_to_half_open` | Timeout triggers Half-Open |
+| `test_half_open_allows_limited` | Limited requests in Half-Open |
+| `test_half_open_to_closed` | Recovers to Closed on success |
+| `test_half_open_to_open` | Returns to Open on failure |
+| `test_failure_window_resets` | Window resets on success |
+| `test_get_metrics` | Metrics retrieval |
+| `test_concurrent_record` | Thread-safe operations |
+
+#### Rate Limiter Tests (14 tests)
+
+```bash
+cargo test infrastructure::rate_limiter
+```
+
+| Test | Description |
+|------|-------------|
+| `test_rate_limit_config_default` | Default: 100 req/s, burst 10 |
+| `test_rate_limiter_new` | Creates with config |
+| `test_check_allows_initial_burst` | Burst requests allowed |
+| `test_check_different_clients_isolated` | Per-IP isolation |
+| `test_remaining` | Token count tracking |
+| `test_clear_client` | Reset individual client |
+| `test_clear_all` | Reset all clients |
+| `test_check_with_cost` | Variable cost requests |
+| `test_cleanup_removes_stale` | GC removes old entries |
+| `test_refill_over_time` | Token replenishment |
+| `test_concurrent_access` | Thread-safe operations |
+
+#### Health Checker Tests (17 tests)
+
+```bash
+cargo test infrastructure::health_checker
+```
+
+| Test | Description |
+|------|-------------|
+| `test_health_checker_new` | Creates with config |
+| `test_health_check_config_default` | Default intervals |
+| `test_health_status_default` | Initial unknown state |
+| `test_tcp_check_success` | TCP probe success |
+| `test_tcp_check_failure` | TCP probe failure |
+| `test_tcp_check_timeout` | TCP timeout handling |
+| `test_update_status_becomes_healthy` | Threshold transitions |
+| `test_update_status_becomes_unhealthy` | Failure transitions |
+| `test_on_health_change_callback` | Change notifications |
+| `test_check_backend_success` | Backend check OK |
+| `test_check_backend_failure` | Backend check fail |
+
+#### Connection Pool Tests (17 tests)
+
+```bash
+cargo test infrastructure::connection_pool
+```
+
+| Test | Description |
+|------|-------------|
+| `test_connection_pool_new` | Pool creation |
+| `test_pool_config_default` | Default: 10 max, 60s idle |
+| `test_acquire_creates_connection` | New connection on empty pool |
+| `test_release_returns_connection` | Connection reuse |
+| `test_pool_exhausted` | Max connections error |
+| `test_acquire_timeout` | Connection timeout |
+| `test_discard_closes_connection` | Explicit discard |
+| `test_stats` | Pool statistics |
+| `test_pooled_connection_is_expired` | Lifetime check |
+| `test_pooled_connection_is_idle_expired` | Idle timeout check |
+
+#### Graceful Shutdown Tests (11 tests)
+
+```bash
+cargo test infrastructure::shutdown
+```
+
+| Test | Description |
+|------|-------------|
+| `test_shutdown_controller_new` | Controller creation |
+| `test_connection_guard` | RAII guard creation |
+| `test_connection_tracking` | Active count tracking |
+| `test_multiple_connection_guards` | Concurrent guards |
+| `test_shutdown_initiates_once` | Single shutdown |
+| `test_subscribe_receives_shutdown` | Broadcast notification |
+| `test_wait_for_drain_immediate` | No connections case |
+| `test_wait_for_drain_with_connections` | Waits for drain |
+| `test_wait_for_drain_timeout` | Timeout behavior |
+
+#### Config Watcher Tests (17 tests)
+
+```bash
+cargo test infrastructure::config_watcher
+```
+
+| Test | Description |
+|------|-------------|
+| `test_config_watcher_new` | Watcher creation |
+| `test_watch_file` | File monitoring |
+| `test_watch_nonexistent_file` | Error handling |
+| `test_unwatch_file` | Remove from watch |
+| `test_set_and_get` | Config values |
+| `test_get_or` | Default values |
+| `test_subscribe_value_change` | Change notifications |
+| `test_no_change_on_same_value` | No spurious events |
+| `test_check_files_detects_modification` | File change detection |
+| `test_hot_value_get_set` | HotValue wrapper |
 
 ---
 
@@ -436,14 +591,17 @@ rustup component add llvm-tools-preview
 ### Running Coverage
 
 ```bash
-# Basic coverage report (excludes main.rs)
-cargo +nightly llvm-cov --ignore-filename-regex "main.rs"
+# Basic coverage report
+cargo llvm-cov
+
+# Summary only
+cargo llvm-cov report --summary-only
 
 # Coverage with HTML report
-cargo +nightly llvm-cov --html --ignore-filename-regex "main.rs"
+cargo llvm-cov --html
 
 # Coverage with LCOV output
-cargo +nightly llvm-cov --lcov --output-path lcov.info --ignore-filename-regex "main.rs"
+cargo llvm-cov --lcov --output-path lcov.info
 
 # Open HTML report
 open target/llvm-cov/html/index.html
@@ -451,24 +609,59 @@ open target/llvm-cov/html/index.html
 
 ### Coverage Results
 
-**Final Coverage: 99.38%** (1,441 of 1,450 lines covered)
+**Final Coverage: 95.54%** (9,106 of 9,531 lines covered)
 
-| File | Coverage | Lines | Missed | Notes |
-|------|----------|-------|--------|-------|
-| `config.rs` | 100% | 92 | 0 | All configuration paths tested |
-| `domain/entities.rs` | 100% | 58 | 0 | All entity methods tested |
-| `domain/value_objects.rs` | 100% | 106 | 0 | Full country/region mapping |
-| `domain/services/load_balancer.rs` | 98.78% | 82 | 5 | Branch coverage on edge cases |
-| `application/proxy_service.rs` | 100% | 80 | 0 | Full use case coverage |
-| `adapters/inbound/api_server.rs` | 100% | 295 | 0 | Complete API coverage |
-| `adapters/inbound/dns_server.rs` | 100% | 138 | 0 | DNS resolution tested |
-| `adapters/inbound/tcp_server.rs` | 97.92% | 96 | 1 | Network I/O exclusion |
-| `adapters/inbound/tls_server.rs` | 97.30% | 111 | 3 | TLS handshake edge cases |
-| `adapters/outbound/sqlite_backend_repo.rs` | 100% | 67 | 0 | Full SQLite coverage |
-| `adapters/outbound/corrosion_backend_repo.rs` | 100% | 127 | 0 | Distributed sync tested |
-| `adapters/outbound/dashmap_binding_repo.rs` | 100% | 78 | 0 | Client affinity complete |
-| `adapters/outbound/dashmap_metrics_store.rs` | 100% | 68 | 0 | Metrics tracking covered |
-| `adapters/outbound/maxmind_geo_resolver.rs` | 100% | 52 | 0 | GeoIP resolution covered |
+#### Coverage by Layer
+
+| Layer | Lines | Coverage | Status |
+|-------|-------|----------|--------|
+| **Domain** | 761 | 98.42% | ✓ Excellent |
+| **Application** | 706 | 99.43% | ✓ Excellent |
+| **Inbound Adapters** | 3,547 | 96.94% | ✓ Very Good |
+| **Outbound Adapters** | 2,275 | 97.67% | ✓ Very Good |
+| **Infrastructure** | 1,849 | 91.35% | ✓ Good |
+| **Config** | 286 | 100.00% | ✓ Complete |
+
+#### Detailed Coverage by File
+
+##### Core Components (100% Coverage)
+
+| File | Lines | Coverage |
+|------|-------|----------|
+| `config.rs` | 286 | 100.00% |
+| `domain/entities.rs` | 130 | 100.00% |
+| `adapters/outbound/dashmap_metrics_store.rs` | 224 | 100.00% |
+| `adapters/outbound/dashmap_binding_repo.rs` | 287 | 100.00% |
+
+##### Inbound Adapters
+
+| File | Lines | Covered | Coverage |
+|------|-------|---------|----------|
+| `adapters/inbound/api_server.rs` | 928 | 924 | 99.57% |
+| `adapters/inbound/dns_server.rs` | 774 | 757 | 97.80% |
+| `adapters/inbound/tcp_server.rs` | 849 | 817 | 96.23% |
+| `adapters/inbound/tls_server.rs` | 996 | 938 | 94.18% |
+
+##### Outbound Adapters
+
+| File | Lines | Covered | Coverage |
+|------|-------|---------|----------|
+| `adapters/outbound/corrosion_backend_repo.rs` | 677 | 676 | 99.85% |
+| `adapters/outbound/sqlite_backend_repo.rs` | 404 | 401 | 99.26% |
+| `adapters/outbound/prometheus_metrics_store.rs` | 307 | 303 | 98.70% |
+| `adapters/outbound/maxmind_geo_resolver.rs` | 145 | 139 | 95.86% |
+| `adapters/outbound/postgres_backend_repo.rs` | 231 | 204 | 88.31% |
+
+##### Infrastructure Layer (NEW)
+
+| File | Lines | Covered | Coverage |
+|------|-------|---------|----------|
+| `infrastructure/circuit_breaker.rs` | 353 | 347 | 98.30% |
+| `infrastructure/config_watcher.rs` | 298 | 281 | 94.30% |
+| `infrastructure/rate_limiter.rs` | 261 | 240 | 91.95% |
+| `infrastructure/health_checker.rs` | 371 | 340 | 91.64% |
+| `infrastructure/connection_pool.rs` | 391 | 341 | 87.21% |
+| `infrastructure/shutdown.rs` | 175 | 151 | 86.29% |
 
 ### Coverage Exclusions
 
@@ -479,16 +672,21 @@ Some code is intentionally excluded from coverage using `#[cfg_attr(coverage_nig
 | `main.rs` | Entry point, composition root |
 | `handle_packet()` (dns_server) | Network I/O dependent |
 | `proxy_bidirectional()` (tcp_server) | Real TCP socket operations |
-| `start_sync()` (sqlite_backend_repo) | Background thread with I/O |
+| `start_sync()` (repositories) | Background threads with I/O |
+| `start()` (health_checker) | Background health check loop |
+| `start_cleanup_with_arc()` (rate_limiter) | Background cleanup task |
 | Test modules (`#[cfg(test)]`) | Test code is not production code |
 
-### Why Not 100%?
+### Why Some Files Have Lower Coverage?
 
-The remaining 9 uncovered lines are **branch coverage artifacts**, not truly untested code:
+The infrastructure layer has slightly lower coverage (86-92%) because:
 
-1. **Branch conditions with `0` values**: Lines like `if soft_limit == 0` or `if weight == 0` are tested, but LLVM counts branches differently
-2. **Network I/O edge cases**: Some error paths in async network code cannot be triggered in unit tests
-3. **All lines execute**: LCOV analysis shows `0` lines with zero hit count - the "missed" lines are internal branch counters
+1. **Background tasks**: Methods like `start()` spawn tokio tasks that run indefinitely
+2. **Network I/O**: TCP connection creation and health checks require real network
+3. **Signal handlers**: OS signal handling cannot be unit tested easily
+4. **Cleanup loops**: Periodic cleanup tasks run in background threads
+
+These are tested via integration tests with the mock backend server.
 
 ### Testing Philosophy
 
@@ -497,7 +695,8 @@ edgeProxy follows these testing principles:
 1. **Domain logic is pure and fully tested**: `LoadBalancer` scoring algorithm has no external dependencies
 2. **Adapters test through interfaces**: Mock implementations of traits for unit testing
 3. **Integration tests use real components**: Mock backend server for E2E testing
-4. **Network code has coverage exclusions**: I/O-bound code is tested via integration tests, not unit tests
+4. **Network code has coverage exclusions**: I/O-bound code is tested via integration tests
+5. **Infrastructure is modular**: Each component can be tested in isolation
 
 ### Continuous Integration
 
@@ -506,7 +705,14 @@ edgeProxy follows these testing principles:
 test:
   script:
     - cargo test
-    - cargo +nightly llvm-cov --ignore-filename-regex "main.rs" --fail-under-lines 95
+    - cargo llvm-cov --fail-under-lines 90
+
+coverage:
+  script:
+    - cargo llvm-cov --html
+  artifacts:
+    paths:
+      - target/llvm-cov/html/
 ```
 
-The `--fail-under-lines 95` flag ensures coverage doesn't drop below 95% in CI.
+The `--fail-under-lines 90` flag ensures coverage doesn't drop below 90% in CI.

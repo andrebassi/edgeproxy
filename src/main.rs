@@ -8,6 +8,7 @@ mod adapters;
 mod application;
 mod config;
 mod domain;
+mod infrastructure;
 
 use crate::adapters::inbound::{ApiServer, DnsServer, TcpServer, TlsConfig, TlsServer};
 use crate::adapters::outbound::{

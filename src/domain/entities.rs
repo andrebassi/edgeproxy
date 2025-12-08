@@ -13,7 +13,7 @@ use std::time::Instant;
 ///
 /// Backends are distributed across regions and have capacity limits.
 /// The load balancer uses this information to route clients optimally.
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct Backend {
     /// Unique identifier for this backend
     pub id: String,

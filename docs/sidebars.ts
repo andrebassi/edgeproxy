@@ -27,7 +27,22 @@ const sidebars: SidebarsConfig = {
       ],
     },
     'deployment/gcp',
-    'configuration',
+    {
+      type: 'category',
+      label: 'Configuration',
+      link: {
+        type: 'doc',
+        id: 'configuration/index',
+      },
+      items: [
+        'configuration/environment-variables',
+        'configuration/database-schema',
+        'configuration/dns-server',
+        'configuration/auto-discovery-api',
+        'configuration/corrosion',
+        'configuration/infrastructure',
+      ],
+    },
     'testing',
     'performance',
     'benchmark',

@@ -1,8 +1,13 @@
 version: '3'
 
 tasks:
+  default:
+    desc: Build and serve with all locales (EN + PT-BR)
+    cmds:
+      - task: serve
+
   dev:
-    desc: Start development server (hot reload, single locale)
+    desc: Start development server (hot reload, single locale EN only)
     cmds:
       - npm run start
     silent: false
@@ -10,12 +15,12 @@ tasks:
   build:
     desc: Build static site for all locales (EN + PT-BR)
     cmds:
-      - rm -rf .docusaurus build
+      - npm run clear
       - npm run build
     silent: false
 
   serve:
-    desc: Serve built site with all locales (EN + PT-BR)
+    desc: Build and serve with all locales (EN + PT-BR) - USE THIS FOR i18n
     deps: [build]
     cmds:
       - npm run serve
@@ -28,7 +33,7 @@ tasks:
     silent: false
 
   rebuild:
-    desc: Clean, build and serve
+    desc: Clean, build and serve with all locales
     cmds:
       - task: clean
       - task: serve
