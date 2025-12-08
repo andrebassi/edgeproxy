@@ -415,7 +415,35 @@ mod tests {
     use tempfile::NamedTempFile;
 
     #[test]
-    fn test_version_vector() {
+    fn test_version_vector_new() {
+        let vv = VersionVector::new();
+        assert_eq!(vv.get("any-node"), 0);
+    }
+
+    #[test]
+    fn test_version_vector_default() {
+        let vv = VersionVector::default();
+        assert_eq!(vv.get("any-node"), 0);
+    }
+
+    #[test]
+    fn test_version_vector_debug() {
+        let vv = VersionVector::new();
+        let debug = format!("{:?}", vv);
+        assert!(debug.contains("VersionVector"));
+    }
+
+    #[test]
+    fn test_version_vector_clone() {
+        let mut vv = VersionVector::new();
+        vv.update("node-1", 5);
+
+        let cloned = vv.clone();
+        assert_eq!(cloned.get("node-1"), 5);
+    }
+
+    #[test]
+    fn test_version_vector_get_update() {
         let mut vv = VersionVector::new();
 
         assert_eq!(vv.get("node-1"), 0);
@@ -426,6 +454,42 @@ mod tests {
         assert!(vv.has_seen("node-1", 5));
         assert!(vv.has_seen("node-1", 3));
         assert!(!vv.has_seen("node-1", 6));
+    }
+
+    #[test]
+    fn test_version_vector_update_only_increases() {
+        let mut vv = VersionVector::new();
+
+        vv.update("node-1", 10);
+        assert_eq!(vv.get("node-1"), 10);
+
+        // Lower value should not decrease
+        vv.update("node-1", 5);
+        assert_eq!(vv.get("node-1"), 10);
+
+        // Higher value should increase
+        vv.update("node-1", 15);
+        assert_eq!(vv.get("node-1"), 15);
+    }
+
+    #[test]
+    fn test_version_vector_has_seen() {
+        let mut vv = VersionVector::new();
+
+        // Unknown node - hasn't seen anything
+        assert!(!vv.has_seen("unknown", 1));
+        assert!(vv.has_seen("unknown", 0));
+
+        vv.update("node-1", 5);
+
+        // Has seen seq <= 5
+        assert!(vv.has_seen("node-1", 0));
+        assert!(vv.has_seen("node-1", 1));
+        assert!(vv.has_seen("node-1", 5));
+
+        // Has not seen seq > 5
+        assert!(!vv.has_seen("node-1", 6));
+        assert!(!vv.has_seen("node-1", 100));
     }
 
     #[test]
@@ -446,6 +510,53 @@ mod tests {
     }
 
     #[test]
+    fn test_version_vector_merge_empty() {
+        let mut vv1 = VersionVector::new();
+        vv1.update("node-1", 5);
+
+        let vv2 = VersionVector::new();
+        vv1.merge(&vv2);
+
+        assert_eq!(vv1.get("node-1"), 5);
+    }
+
+    #[test]
+    fn test_sync_event_change_applied_debug() {
+        let change = Change::new("backends", "b1", ChangeKind::Insert, "{}", &NodeId::new("node-1"));
+        let event = SyncEvent::ChangeApplied(change);
+        let debug = format!("{:?}", event);
+        assert!(debug.contains("ChangeApplied"));
+    }
+
+    #[test]
+    fn test_sync_event_broadcast_ready_debug() {
+        let cs = ChangeSet::new(NodeId::new("node-1"), 1, vec![]);
+        let event = SyncEvent::BroadcastReady(cs);
+        let debug = format!("{:?}", event);
+        assert!(debug.contains("BroadcastReady"));
+    }
+
+    #[test]
+    fn test_sync_event_peer_synced_debug() {
+        let event = SyncEvent::PeerSynced {
+            node_id: NodeId::new("peer-1"),
+            changes_applied: 5,
+        };
+        let debug = format!("{:?}", event);
+        assert!(debug.contains("PeerSynced"));
+        assert!(debug.contains("peer-1"));
+    }
+
+    #[test]
+    fn test_sync_event_clone() {
+        let cs = ChangeSet::new(NodeId::new("node-1"), 1, vec![]);
+        let event = SyncEvent::BroadcastReady(cs);
+        let cloned = event.clone();
+        let debug = format!("{:?}", cloned);
+        assert!(debug.contains("BroadcastReady"));
+    }
+
+    #[test]
     fn test_sync_service_creation() {
         let temp = NamedTempFile::new().unwrap();
         let service = SyncService::new(
@@ -454,6 +565,35 @@ mod tests {
         );
 
         assert_eq!(service.sequence(), 0);
+    }
+
+    #[test]
+    fn test_sync_service_take_event_rx() {
+        let temp = NamedTempFile::new().unwrap();
+        let mut service = SyncService::new(
+            NodeId::new("test-node"),
+            temp.path().to_str().unwrap().to_string(),
+        );
+
+        // First call should return Some
+        let rx = service.take_event_rx();
+        assert!(rx.is_some());
+
+        // Second call should return None
+        let rx = service.take_event_rx();
+        assert!(rx.is_none());
+    }
+
+    #[test]
+    fn test_sync_service_version_vector() {
+        let temp = NamedTempFile::new().unwrap();
+        let service = SyncService::new(
+            NodeId::new("test-node"),
+            temp.path().to_str().unwrap().to_string(),
+        );
+
+        let vv = service.version_vector();
+        assert_eq!(vv.get("test-node"), 0);
     }
 
     #[test]
@@ -483,6 +623,38 @@ mod tests {
     }
 
     #[test]
+    fn test_sync_service_init_db_loads_version_vector() {
+        let temp = NamedTempFile::new().unwrap();
+
+        // First, create and init service, flush some changes
+        {
+            let service = SyncService::new(
+                NodeId::new("node-1"),
+                temp.path().to_str().unwrap().to_string(),
+            );
+            service.init_db().unwrap();
+
+            // Manually insert a version
+            let conn = Connection::open(temp.path()).unwrap();
+            conn.execute(
+                "INSERT INTO __replication_versions (node_id, sequence) VALUES (?, ?)",
+                params!["node-1", 10i64],
+            ).unwrap();
+        }
+
+        // Create new service - should load version from DB
+        let service = SyncService::new(
+            NodeId::new("node-1"),
+            temp.path().to_str().unwrap().to_string(),
+        );
+        service.init_db().unwrap();
+
+        // Should have loaded the sequence
+        assert_eq!(service.sequence(), 10);
+        assert!(service.version_vector().has_seen("node-1", 10));
+    }
+
+    #[test]
     fn test_record_change() {
         let temp = NamedTempFile::new().unwrap();
         let service = SyncService::new(
@@ -501,6 +673,23 @@ mod tests {
         assert_eq!(change.pk, "backend-1");
         assert_eq!(change.kind, ChangeKind::Insert);
         assert_eq!(change.origin.0, "test-node");
+    }
+
+    #[test]
+    fn test_record_multiple_changes() {
+        let temp = NamedTempFile::new().unwrap();
+        let service = SyncService::new(
+            NodeId::new("test-node"),
+            temp.path().to_str().unwrap().to_string(),
+        );
+
+        service.record_change("backends", "b1", ChangeKind::Insert, "{}");
+        service.record_change("backends", "b2", ChangeKind::Insert, "{}");
+        service.record_change("backends", "b1", ChangeKind::Update, "{}");
+
+        // Check pending changes
+        let pending = service.pending_changes.read().len();
+        assert_eq!(pending, 3);
     }
 
     #[tokio::test]
@@ -545,5 +734,598 @@ mod tests {
 
         // Version vector should be updated
         assert!(service.version_vector().has_seen("test-node", 1));
+    }
+
+    #[tokio::test]
+    async fn test_flush_increments_sequence() {
+        let temp = NamedTempFile::new().unwrap();
+        let service = SyncService::new(
+            NodeId::new("test-node"),
+            temp.path().to_str().unwrap().to_string(),
+        );
+
+        service.init_db().unwrap();
+
+        // First flush
+        service.record_change("backends", "b1", ChangeKind::Insert, "{}");
+        let cs1 = service.flush().await.unwrap();
+        assert_eq!(cs1.seq, 1);
+
+        // Second flush
+        service.record_change("backends", "b2", ChangeKind::Insert, "{}");
+        let cs2 = service.flush().await.unwrap();
+        assert_eq!(cs2.seq, 2);
+
+        // Third flush
+        service.record_change("backends", "b3", ChangeKind::Insert, "{}");
+        let cs3 = service.flush().await.unwrap();
+        assert_eq!(cs3.seq, 3);
+
+        assert_eq!(service.sequence(), 3);
+    }
+
+    #[tokio::test]
+    async fn test_flush_clears_pending() {
+        let temp = NamedTempFile::new().unwrap();
+        let service = SyncService::new(
+            NodeId::new("test-node"),
+            temp.path().to_str().unwrap().to_string(),
+        );
+
+        service.init_db().unwrap();
+
+        service.record_change("backends", "b1", ChangeKind::Insert, "{}");
+        service.record_change("backends", "b2", ChangeKind::Insert, "{}");
+
+        assert_eq!(service.pending_changes.read().len(), 2);
+
+        service.flush().await;
+
+        // Should be empty after flush
+        assert_eq!(service.pending_changes.read().len(), 0);
+    }
+
+    #[tokio::test]
+    async fn test_apply_changeset_invalid_checksum() {
+        let temp = NamedTempFile::new().unwrap();
+        let service = SyncService::new(
+            NodeId::new("test-node"),
+            temp.path().to_str().unwrap().to_string(),
+        );
+        service.init_db().unwrap();
+
+        // Create changeset with invalid checksum
+        let mut cs = ChangeSet::new(NodeId::new("other-node"), 1, vec![]);
+        cs.checksum = 12345; // Invalid checksum
+
+        let result = service.apply_changeset(&cs).await;
+        assert!(result.is_err());
+        assert!(result.unwrap_err().to_string().contains("checksum"));
+    }
+
+    #[tokio::test]
+    async fn test_apply_changeset_already_seen() {
+        let temp = NamedTempFile::new().unwrap();
+        let service = SyncService::new(
+            NodeId::new("test-node"),
+            temp.path().to_str().unwrap().to_string(),
+        );
+        service.init_db().unwrap();
+
+        // Manually set version vector to have seen seq 5
+        service.version_vector.write().update("other-node", 5);
+
+        // Create changeset with seq 5 (already seen)
+        let cs = ChangeSet::new(NodeId::new("other-node"), 5, vec![]);
+
+        let result = service.apply_changeset(&cs).await.unwrap();
+        assert_eq!(result, 0); // Nothing applied
+    }
+
+    #[tokio::test]
+    async fn test_apply_changeset_with_backend_insert() {
+        let temp = NamedTempFile::new().unwrap();
+        let service = SyncService::new(
+            NodeId::new("test-node"),
+            temp.path().to_str().unwrap().to_string(),
+        );
+        service.init_db().unwrap();
+
+        let source_node = NodeId::new("other-node");
+        let data = r#"{"app":"myapp","region":"sa","wg_ip":"10.0.0.1","port":8080}"#;
+        let changes = vec![
+            Change::new("backends", "backend-1", ChangeKind::Insert, data, &source_node),
+        ];
+        let cs = ChangeSet::new(source_node.clone(), 1, changes);
+
+        let applied = service.apply_changeset(&cs).await.unwrap();
+        assert_eq!(applied, 1);
+
+        // Verify backend was inserted
+        let conn = Connection::open(temp.path()).unwrap();
+        let count: i64 = conn
+            .query_row("SELECT COUNT(*) FROM backends WHERE id = 'backend-1'", [], |row| row.get(0))
+            .unwrap();
+        assert_eq!(count, 1);
+
+        // Verify version vector updated
+        assert!(service.version_vector().has_seen("other-node", 1));
+    }
+
+    #[tokio::test]
+    async fn test_apply_changeset_with_backend_update() {
+        let temp = NamedTempFile::new().unwrap();
+        let service = SyncService::new(
+            NodeId::new("test-node"),
+            temp.path().to_str().unwrap().to_string(),
+        );
+        service.init_db().unwrap();
+
+        // First insert
+        let source_node = NodeId::new("other-node");
+        let data1 = r#"{"app":"myapp","region":"sa","wg_ip":"10.0.0.1","port":8080}"#;
+        let changes1 = vec![
+            Change::new("backends", "backend-1", ChangeKind::Insert, data1, &source_node),
+        ];
+        let cs1 = ChangeSet::new(source_node.clone(), 1, changes1);
+        service.apply_changeset(&cs1).await.unwrap();
+
+        // Small delay to ensure different timestamp
+        tokio::time::sleep(std::time::Duration::from_millis(2)).await;
+
+        // Then update
+        let data2 = r#"{"app":"myapp","region":"us","wg_ip":"10.0.0.2","port":9000}"#;
+        let changes2 = vec![
+            Change::new("backends", "backend-1", ChangeKind::Update, data2, &source_node),
+        ];
+        let cs2 = ChangeSet::new(source_node, 2, changes2);
+        let applied = service.apply_changeset(&cs2).await.unwrap();
+        assert_eq!(applied, 1);
+
+        // Verify backend was updated
+        let conn = Connection::open(temp.path()).unwrap();
+        let region: String = conn
+            .query_row("SELECT region FROM backends WHERE id = 'backend-1'", [], |row| row.get(0))
+            .unwrap();
+        assert_eq!(region, "us");
+    }
+
+    #[tokio::test]
+    async fn test_apply_changeset_with_backend_delete() {
+        let temp = NamedTempFile::new().unwrap();
+        let service = SyncService::new(
+            NodeId::new("test-node"),
+            temp.path().to_str().unwrap().to_string(),
+        );
+        service.init_db().unwrap();
+
+        // First insert
+        let source_node = NodeId::new("other-node");
+        let data = r#"{"app":"myapp","region":"sa","wg_ip":"10.0.0.1","port":8080}"#;
+        let changes1 = vec![
+            Change::new("backends", "backend-1", ChangeKind::Insert, data, &source_node),
+        ];
+        let cs1 = ChangeSet::new(source_node.clone(), 1, changes1);
+        service.apply_changeset(&cs1).await.unwrap();
+
+        // Small delay
+        tokio::time::sleep(std::time::Duration::from_millis(2)).await;
+
+        // Then delete
+        let changes2 = vec![
+            Change::new("backends", "backend-1", ChangeKind::Delete, "{}", &source_node),
+        ];
+        let cs2 = ChangeSet::new(source_node, 2, changes2);
+        let applied = service.apply_changeset(&cs2).await.unwrap();
+        assert_eq!(applied, 1);
+
+        // Verify backend was soft-deleted
+        let conn = Connection::open(temp.path()).unwrap();
+        let deleted: i64 = conn
+            .query_row("SELECT deleted FROM backends WHERE id = 'backend-1'", [], |row| row.get(0))
+            .unwrap();
+        assert_eq!(deleted, 1);
+    }
+
+    #[tokio::test]
+    async fn test_apply_changeset_lww_newer_wins() {
+        let temp = NamedTempFile::new().unwrap();
+        let service = SyncService::new(
+            NodeId::new("test-node"),
+            temp.path().to_str().unwrap().to_string(),
+        );
+        service.init_db().unwrap();
+
+        let source_node = NodeId::new("other-node");
+
+        // Create first change
+        let data1 = r#"{"app":"old","region":"sa","wg_ip":"10.0.0.1","port":8080}"#;
+        let change1 = Change::new("backends", "backend-1", ChangeKind::Insert, data1, &source_node);
+        let cs1 = ChangeSet::new(source_node.clone(), 1, vec![change1]);
+        service.apply_changeset(&cs1).await.unwrap();
+
+        // Small delay to get different timestamp
+        tokio::time::sleep(std::time::Duration::from_millis(2)).await;
+
+        // Create second change with newer timestamp
+        let data2 = r#"{"app":"new","region":"us","wg_ip":"10.0.0.2","port":9000}"#;
+        let change2 = Change::new("backends", "backend-1", ChangeKind::Update, data2, &source_node);
+        let cs2 = ChangeSet::new(source_node, 2, vec![change2]);
+        let applied = service.apply_changeset(&cs2).await.unwrap();
+
+        assert_eq!(applied, 1);
+
+        // Verify newer value was applied
+        let conn = Connection::open(temp.path()).unwrap();
+        let app: String = conn
+            .query_row("SELECT app FROM backends WHERE id = 'backend-1'", [], |row| row.get(0))
+            .unwrap();
+        assert_eq!(app, "new");
+    }
+
+    #[tokio::test]
+    async fn test_apply_changeset_unknown_table() {
+        let temp = NamedTempFile::new().unwrap();
+        let service = SyncService::new(
+            NodeId::new("test-node"),
+            temp.path().to_str().unwrap().to_string(),
+        );
+        service.init_db().unwrap();
+
+        let source_node = NodeId::new("other-node");
+        let changes = vec![
+            Change::new("unknown_table", "pk1", ChangeKind::Insert, "{}", &source_node),
+        ];
+        let cs = ChangeSet::new(source_node, 1, changes);
+
+        // Should not fail, just log warning
+        let applied = service.apply_changeset(&cs).await.unwrap();
+        assert_eq!(applied, 1); // Change was "applied" (to LWW table)
+    }
+
+    #[test]
+    fn test_get_changes_since() {
+        let temp = NamedTempFile::new().unwrap();
+        let service = SyncService::new(
+            NodeId::new("test-node"),
+            temp.path().to_str().unwrap().to_string(),
+        );
+        service.init_db().unwrap();
+
+        // Currently returns empty (placeholder implementation)
+        let result = service.get_changes_since("other-node", 0).unwrap();
+        assert!(result.is_empty());
+    }
+
+    #[test]
+    fn test_persist_version() {
+        let temp = NamedTempFile::new().unwrap();
+        let service = SyncService::new(
+            NodeId::new("test-node"),
+            temp.path().to_str().unwrap().to_string(),
+        );
+        service.init_db().unwrap();
+
+        // Persist version
+        service.persist_version("node-1", 42).unwrap();
+
+        // Verify in database
+        let conn = Connection::open(temp.path()).unwrap();
+        let seq: i64 = conn
+            .query_row(
+                "SELECT sequence FROM __replication_versions WHERE node_id = 'node-1'",
+                [],
+                |row| row.get(0),
+            )
+            .unwrap();
+        assert_eq!(seq, 42);
+
+        // Update version
+        service.persist_version("node-1", 100).unwrap();
+
+        let seq: i64 = conn
+            .query_row(
+                "SELECT sequence FROM __replication_versions WHERE node_id = 'node-1'",
+                [],
+                |row| row.get(0),
+            )
+            .unwrap();
+        assert_eq!(seq, 100);
+    }
+
+    #[tokio::test]
+    async fn test_apply_changeset_lww_older_ignored() {
+        let temp = NamedTempFile::new().unwrap();
+        let service = SyncService::new(
+            NodeId::new("test-node"),
+            temp.path().to_str().unwrap().to_string(),
+        );
+        service.init_db().unwrap();
+
+        let source_node = NodeId::new("other-node");
+
+        // Create and apply newer change first (higher timestamp)
+        let data_new = r#"{"app":"new","region":"us","wg_ip":"10.0.0.2","port":9000}"#;
+        let change_new = Change::new("backends", "backend-1", ChangeKind::Insert, data_new, &source_node);
+        let ts_new = change_new.timestamp;
+        let cs_new = ChangeSet::new(source_node.clone(), 2, vec![change_new]);
+        service.apply_changeset(&cs_new).await.unwrap();
+
+        // Create older change with lower timestamp
+        let data_old = r#"{"app":"old","region":"sa","wg_ip":"10.0.0.1","port":8080}"#;
+        let mut change_old = Change::new("backends", "backend-1", ChangeKind::Update, data_old, &source_node);
+        // Make it older by setting a lower timestamp
+        change_old.timestamp = HLCTimestamp {
+            wall_time: ts_new.wall_time - 10000, // 10 seconds earlier
+            counter: 0,
+            node_hash: 1,
+        };
+
+        let cs_old = ChangeSet::new(source_node, 3, vec![change_old]);
+        let applied = service.apply_changeset(&cs_old).await.unwrap();
+
+        // Old change should NOT be applied due to LWW
+        assert_eq!(applied, 0);
+
+        // Verify value is still "new"
+        let conn = Connection::open(temp.path()).unwrap();
+        let app: String = conn
+            .query_row("SELECT app FROM backends WHERE id = 'backend-1'", [], |row| row.get(0))
+            .unwrap();
+        assert_eq!(app, "new");
+    }
+
+    #[tokio::test]
+    async fn test_apply_changeset_lww_from_cache() {
+        let temp = NamedTempFile::new().unwrap();
+        let service = SyncService::new(
+            NodeId::new("test-node"),
+            temp.path().to_str().unwrap().to_string(),
+        );
+        service.init_db().unwrap();
+
+        let source_node = NodeId::new("other-node");
+
+        // Apply first change to populate cache
+        let data1 = r#"{"app":"first","region":"sa","wg_ip":"10.0.0.1","port":8080}"#;
+        let change1 = Change::new("backends", "backend-1", ChangeKind::Insert, data1, &source_node);
+        let ts1 = change1.timestamp;
+        let cs1 = ChangeSet::new(source_node.clone(), 1, vec![change1]);
+        service.apply_changeset(&cs1).await.unwrap();
+
+        // Verify cache is populated
+        let key = "backends:backend-1";
+        assert!(service.last_timestamps.read().contains_key(key));
+
+        // Create older change - should be rejected from cache (fast path)
+        let data2 = r#"{"app":"old","region":"us","wg_ip":"10.0.0.2","port":9000}"#;
+        let mut change2 = Change::new("backends", "backend-1", ChangeKind::Update, data2, &source_node);
+        change2.timestamp = HLCTimestamp {
+            wall_time: ts1.wall_time - 5000,
+            counter: 0,
+            node_hash: 1,
+        };
+        let cs2 = ChangeSet::new(source_node, 2, vec![change2]);
+        let applied = service.apply_changeset(&cs2).await.unwrap();
+
+        // Should be rejected by cache check
+        assert_eq!(applied, 0);
+    }
+
+    #[tokio::test]
+    async fn test_apply_changeset_multiple_changes() {
+        let temp = NamedTempFile::new().unwrap();
+        let service = SyncService::new(
+            NodeId::new("test-node"),
+            temp.path().to_str().unwrap().to_string(),
+        );
+        service.init_db().unwrap();
+
+        let source_node = NodeId::new("other-node");
+
+        // Create multiple changes in one changeset
+        let changes = vec![
+            Change::new("backends", "b1", ChangeKind::Insert, r#"{"app":"app1","region":"sa","wg_ip":"10.0.0.1","port":8080}"#, &source_node),
+            Change::new("backends", "b2", ChangeKind::Insert, r#"{"app":"app2","region":"us","wg_ip":"10.0.0.2","port":8081}"#, &source_node),
+            Change::new("backends", "b3", ChangeKind::Insert, r#"{"app":"app3","region":"eu","wg_ip":"10.0.0.3","port":8082}"#, &source_node),
+        ];
+
+        let cs = ChangeSet::new(source_node, 1, changes);
+        let applied = service.apply_changeset(&cs).await.unwrap();
+
+        assert_eq!(applied, 3);
+
+        // Verify all backends were created
+        let conn = Connection::open(temp.path()).unwrap();
+        let count: i64 = conn
+            .query_row("SELECT COUNT(*) FROM backends", [], |row| row.get(0))
+            .unwrap();
+        assert_eq!(count, 3);
+    }
+
+    #[tokio::test]
+    async fn test_flush_sends_broadcast_ready_event() {
+        let temp = NamedTempFile::new().unwrap();
+        let mut service = SyncService::new(
+            NodeId::new("test-node"),
+            temp.path().to_str().unwrap().to_string(),
+        );
+        let mut event_rx = service.take_event_rx().unwrap();
+
+        service.init_db().unwrap();
+
+        // Record a change
+        service.record_change("backends", "b1", ChangeKind::Insert, "{}");
+
+        // Flush should send BroadcastReady event
+        let _cs = service.flush().await;
+
+        // Check for event
+        let event = tokio::time::timeout(
+            std::time::Duration::from_millis(100),
+            event_rx.recv()
+        ).await;
+
+        assert!(event.is_ok());
+        if let Ok(Some(SyncEvent::BroadcastReady(cs))) = event {
+            assert_eq!(cs.seq, 1);
+        } else {
+            panic!("expected BroadcastReady event");
+        }
+    }
+
+    #[tokio::test]
+    async fn test_apply_changeset_sends_change_applied_event() {
+        let temp = NamedTempFile::new().unwrap();
+        let mut service = SyncService::new(
+            NodeId::new("test-node"),
+            temp.path().to_str().unwrap().to_string(),
+        );
+        let mut event_rx = service.take_event_rx().unwrap();
+
+        service.init_db().unwrap();
+
+        let source_node = NodeId::new("other-node");
+        let changes = vec![
+            Change::new("backends", "b1", ChangeKind::Insert, r#"{"app":"app1","region":"sa","wg_ip":"10.0.0.1","port":8080}"#, &source_node),
+        ];
+        let cs = ChangeSet::new(source_node, 1, changes);
+
+        service.apply_changeset(&cs).await.unwrap();
+
+        // Should receive ChangeApplied event
+        let event = tokio::time::timeout(
+            std::time::Duration::from_millis(100),
+            event_rx.recv()
+        ).await;
+
+        assert!(event.is_ok());
+        if let Ok(Some(SyncEvent::ChangeApplied(change))) = event {
+            assert_eq!(change.table, "backends");
+            assert_eq!(change.pk, "b1");
+        } else {
+            panic!("expected ChangeApplied event");
+        }
+    }
+
+    #[tokio::test]
+    async fn test_backend_insert_with_all_fields() {
+        let temp = NamedTempFile::new().unwrap();
+        let service = SyncService::new(
+            NodeId::new("test-node"),
+            temp.path().to_str().unwrap().to_string(),
+        );
+        service.init_db().unwrap();
+
+        let source_node = NodeId::new("other-node");
+        let data = r#"{
+            "app": "fullapp",
+            "region": "eu",
+            "country": "DE",
+            "wg_ip": "10.50.1.1",
+            "port": 9999,
+            "healthy": 1,
+            "weight": 5,
+            "soft_limit": 200,
+            "hard_limit": 300
+        }"#;
+
+        let changes = vec![
+            Change::new("backends", "full-backend", ChangeKind::Insert, data, &source_node),
+        ];
+        let cs = ChangeSet::new(source_node, 1, changes);
+        service.apply_changeset(&cs).await.unwrap();
+
+        // Verify all fields were inserted correctly
+        let conn = Connection::open(temp.path()).unwrap();
+        let row: (String, String, Option<String>, String, i64, i64, i64, i64, i64) = conn
+            .query_row(
+                "SELECT app, region, country, wg_ip, port, weight, soft_limit, hard_limit, healthy FROM backends WHERE id = 'full-backend'",
+                [],
+                |row| Ok((
+                    row.get(0)?,
+                    row.get(1)?,
+                    row.get(2)?,
+                    row.get(3)?,
+                    row.get(4)?,
+                    row.get(5)?,
+                    row.get(6)?,
+                    row.get(7)?,
+                    row.get(8)?,
+                )),
+            )
+            .unwrap();
+
+        assert_eq!(row.0, "fullapp");
+        assert_eq!(row.1, "eu");
+        assert_eq!(row.2, Some("DE".to_string()));
+        assert_eq!(row.3, "10.50.1.1");
+        assert_eq!(row.4, 9999);
+        assert_eq!(row.5, 5);
+        assert_eq!(row.6, 200);
+        assert_eq!(row.7, 300);
+        assert_eq!(row.8, 1);
+    }
+
+    #[tokio::test]
+    async fn test_backend_insert_with_defaults() {
+        let temp = NamedTempFile::new().unwrap();
+        let service = SyncService::new(
+            NodeId::new("test-node"),
+            temp.path().to_str().unwrap().to_string(),
+        );
+        service.init_db().unwrap();
+
+        let source_node = NodeId::new("other-node");
+        // Minimal data - defaults should be used
+        let data = r#"{"app": "minapp"}"#;
+
+        let changes = vec![
+            Change::new("backends", "minimal-backend", ChangeKind::Insert, data, &source_node),
+        ];
+        let cs = ChangeSet::new(source_node, 1, changes);
+        service.apply_changeset(&cs).await.unwrap();
+
+        // Verify defaults were used
+        let conn = Connection::open(temp.path()).unwrap();
+        let row: (String, i64, i64, i64) = conn
+            .query_row(
+                "SELECT region, weight, soft_limit, hard_limit FROM backends WHERE id = 'minimal-backend'",
+                [],
+                |row| Ok((row.get(0)?, row.get(1)?, row.get(2)?, row.get(3)?)),
+            )
+            .unwrap();
+
+        assert_eq!(row.0, "us"); // Default region
+        assert_eq!(row.1, 2);    // Default weight
+        assert_eq!(row.2, 100);  // Default soft_limit
+        assert_eq!(row.3, 150);  // Default hard_limit
+    }
+
+    #[test]
+    fn test_replication_log_table_created() {
+        let temp = NamedTempFile::new().unwrap();
+        let service = SyncService::new(
+            NodeId::new("test-node"),
+            temp.path().to_str().unwrap().to_string(),
+        );
+        service.init_db().unwrap();
+
+        // Verify replication_log table structure
+        let conn = Connection::open(temp.path()).unwrap();
+        let columns: Vec<String> = conn
+            .prepare("PRAGMA table_info(__replication_log)")
+            .unwrap()
+            .query_map([], |row| row.get(1))
+            .unwrap()
+            .collect::<Result<Vec<_>, _>>()
+            .unwrap();
+
+        assert!(columns.contains(&"change_id".to_string()));
+        assert!(columns.contains(&"table_name".to_string()));
+        assert!(columns.contains(&"pk".to_string()));
+        assert!(columns.contains(&"kind".to_string()));
+        assert!(columns.contains(&"data".to_string()));
+        assert!(columns.contains(&"origin_node".to_string()));
     }
 }

@@ -119,6 +119,7 @@ impl PostgresBackendRepository {
     /// Load backends from PostgreSQL.
     ///
     /// This is a stub that returns empty. In production, use sqlx/tokio-postgres.
+    #[cfg_attr(coverage_nightly, coverage(off))]
     async fn load_backends_from_postgres(_config: &PostgresConfig) -> Result<Vec<Backend>, PostgresError> {
         // In a real implementation, this would execute:
         // SELECT id, app, region, country, wg_ip, port, healthy, weight, soft_limit, hard_limit

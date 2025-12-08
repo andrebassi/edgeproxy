@@ -4,24 +4,17 @@
 
 #![cfg_attr(coverage_nightly, feature(coverage_attribute))]
 
-mod adapters;
-mod application;
-mod config;
-mod domain;
-mod infrastructure;
-mod replication;
-
-use crate::adapters::inbound::{ApiServer, DnsServer, TcpServer, TlsConfig, TlsServer};
-use crate::adapters::outbound::{
+use edge_proxy::adapters::inbound::{ApiServer, DnsServer, TcpServer, TlsConfig, TlsServer};
+use edge_proxy::adapters::outbound::{
     DashMapBindingRepository, DashMapMetricsStore,
     MaxMindGeoResolver, SqliteBackendRepository,
 };
-use crate::domain::ports::BackendRepository;
-use crate::application::ProxyService;
-use crate::config::load_config;
-use crate::domain::ports::GeoResolver;
-use crate::domain::value_objects::RegionCode;
-use crate::replication::{ReplicationAgent, ReplicationConfig};
+use edge_proxy::domain::ports::BackendRepository;
+use edge_proxy::application::ProxyService;
+use edge_proxy::config::load_config;
+use edge_proxy::domain::ports::GeoResolver;
+use edge_proxy::domain::value_objects::RegionCode;
+use edge_proxy::replication::{ReplicationAgent, ReplicationConfig};
 use std::path::Path;
 use std::sync::Arc;
 use std::time::Duration;

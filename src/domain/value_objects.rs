@@ -27,7 +27,7 @@ impl RegionCode {
     ///
     /// # Examples
     /// ```
-    /// use edgeproxy::domain::RegionCode;
+    /// use edge_proxy::domain::value_objects::RegionCode;
     ///
     /// assert_eq!(RegionCode::from_str("sa"), RegionCode::SouthAmerica);
     /// assert_eq!(RegionCode::from_str("unknown"), RegionCode::NorthAmerica); // fallback

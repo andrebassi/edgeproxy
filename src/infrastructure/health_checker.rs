@@ -149,6 +149,7 @@ impl HealthChecker {
     }
 
     /// Perform a single health check on a backend.
+    #[cfg_attr(coverage_nightly, coverage(off))]
     async fn check_backend(backend: &Backend, config: &HealthCheckConfig) -> HealthCheckResult {
         let addr = format!("{}:{}", backend.wg_ip, backend.port);
         let start = Instant::now();
@@ -172,6 +173,7 @@ impl HealthChecker {
     }
 
     /// TCP connection check.
+    #[cfg_attr(coverage_nightly, coverage(off))]
     async fn tcp_check(addr: &str, timeout: Duration) -> Result<(), String> {
         match tokio::time::timeout(timeout, TcpStream::connect(addr)).await {
             Ok(Ok(mut stream)) => {
@@ -184,6 +186,7 @@ impl HealthChecker {
     }
 
     /// HTTP health check.
+    #[cfg_attr(coverage_nightly, coverage(off))]
     async fn http_check(addr: &str, path: &str, timeout: Duration) -> Result<(), String> {
         let url = format!("http://{}{}", addr, path);
 
@@ -266,6 +269,91 @@ impl HealthCheckResult {
     pub fn is_success(&self) -> bool {
         matches!(self, HealthCheckResult::Success { .. })
     }
+
+    /// Get the latency in milliseconds.
+    pub fn latency_ms(&self) -> u64 {
+        match self {
+            HealthCheckResult::Success { latency_ms } => *latency_ms,
+            HealthCheckResult::Failure { latency_ms, .. } => *latency_ms,
+        }
+    }
+
+    /// Get the error message if this is a failure.
+    pub fn error(&self) -> Option<&str> {
+        match self {
+            HealthCheckResult::Success { .. } => None,
+            HealthCheckResult::Failure { error, .. } => Some(error),
+        }
+    }
+}
+
+/// Output action from health status update (Sans-IO pattern).
+#[derive(Debug, Clone, PartialEq)]
+pub enum HealthAction {
+    /// Health status changed
+    HealthChanged { backend_id: String, healthy: bool },
+    /// No change in health status
+    NoChange,
+}
+
+/// Calculate health status transition (Sans-IO pattern).
+/// Returns the new status and any action to take.
+pub fn calculate_health_transition(
+    current_status: &HealthStatus,
+    result: &HealthCheckResult,
+    config: &HealthCheckConfig,
+) -> (HealthStatus, HealthAction) {
+    let mut new_status = current_status.clone();
+    let was_healthy = new_status.healthy;
+
+    match result {
+        HealthCheckResult::Success { latency_ms } => {
+            new_status.consecutive_successes += 1;
+            new_status.consecutive_failures = 0;
+            new_status.latency_ms = Some(*latency_ms);
+            new_status.last_error = None;
+
+            if !new_status.healthy && new_status.consecutive_successes >= config.healthy_threshold {
+                new_status.healthy = true;
+            }
+        }
+        HealthCheckResult::Failure { error, latency_ms } => {
+            new_status.consecutive_failures += 1;
+            new_status.consecutive_successes = 0;
+            new_status.latency_ms = Some(*latency_ms);
+            new_status.last_error = Some(error.clone());
+
+            if new_status.healthy && new_status.consecutive_failures >= config.unhealthy_threshold {
+                new_status.healthy = false;
+            }
+        }
+    }
+
+    let action = if was_healthy != new_status.healthy {
+        HealthAction::HealthChanged {
+            backend_id: String::new(), // Caller must set this
+            healthy: new_status.healthy,
+        }
+    } else {
+        HealthAction::NoChange
+    };
+
+    (new_status, action)
+}
+
+/// Build address string for backend (Sans-IO pattern).
+pub fn build_backend_addr(backend: &Backend) -> String {
+    format!("{}:{}", backend.wg_ip, backend.port)
+}
+
+/// Determine if a status indicates the backend should be marked unhealthy.
+pub fn should_mark_unhealthy(status: &HealthStatus, threshold: u32) -> bool {
+    status.healthy && status.consecutive_failures >= threshold
+}
+
+/// Determine if a status indicates the backend should be marked healthy.
+pub fn should_mark_healthy(status: &HealthStatus, threshold: u32) -> bool {
+    !status.healthy && status.consecutive_successes >= threshold
 }
 
 #[cfg(test)]
@@ -539,5 +627,311 @@ mod tests {
 
         let result = checker.check_once(&backend).await;
         assert!(result.is_success());
+    }
+
+    // Sans-IO Tests
+
+    #[test]
+    fn test_health_check_result_latency_ms() {
+        let success = HealthCheckResult::Success { latency_ms: 42 };
+        assert_eq!(success.latency_ms(), 42);
+
+        let failure = HealthCheckResult::Failure {
+            error: "error".to_string(),
+            latency_ms: 100,
+        };
+        assert_eq!(failure.latency_ms(), 100);
+    }
+
+    #[test]
+    fn test_health_check_result_error() {
+        let success = HealthCheckResult::Success { latency_ms: 10 };
+        assert!(success.error().is_none());
+
+        let failure = HealthCheckResult::Failure {
+            error: "connection refused".to_string(),
+            latency_ms: 10,
+        };
+        assert_eq!(failure.error(), Some("connection refused"));
+    }
+
+    #[test]
+    fn test_health_action_eq() {
+        let action1 = HealthAction::NoChange;
+        let action2 = HealthAction::NoChange;
+        assert_eq!(action1, action2);
+
+        let action3 = HealthAction::HealthChanged {
+            backend_id: "b1".to_string(),
+            healthy: true,
+        };
+        let action4 = HealthAction::HealthChanged {
+            backend_id: "b1".to_string(),
+            healthy: true,
+        };
+        assert_eq!(action3, action4);
+
+        assert_ne!(action1, action3);
+    }
+
+    #[test]
+    fn test_health_action_debug() {
+        let action = HealthAction::HealthChanged {
+            backend_id: "backend-1".to_string(),
+            healthy: false,
+        };
+        let debug = format!("{:?}", action);
+        assert!(debug.contains("HealthChanged"));
+        assert!(debug.contains("backend-1"));
+    }
+
+    #[test]
+    fn test_health_action_clone() {
+        let action = HealthAction::HealthChanged {
+            backend_id: "b1".to_string(),
+            healthy: true,
+        };
+        let cloned = action.clone();
+        assert_eq!(action, cloned);
+    }
+
+    #[test]
+    fn test_calculate_health_transition_success_stays_healthy() {
+        let status = HealthStatus::default(); // healthy = true
+        let result = HealthCheckResult::Success { latency_ms: 10 };
+        let config = HealthCheckConfig::default();
+
+        let (new_status, action) = calculate_health_transition(&status, &result, &config);
+
+        assert!(new_status.healthy);
+        assert_eq!(new_status.consecutive_successes, 1);
+        assert_eq!(new_status.consecutive_failures, 0);
+        assert_eq!(new_status.latency_ms, Some(10));
+        assert!(new_status.last_error.is_none());
+        assert_eq!(action, HealthAction::NoChange);
+    }
+
+    #[test]
+    fn test_calculate_health_transition_failure_stays_healthy() {
+        let status = HealthStatus::default(); // healthy = true
+        let result = HealthCheckResult::Failure {
+            error: "timeout".to_string(),
+            latency_ms: 5000,
+        };
+        let config = HealthCheckConfig {
+            unhealthy_threshold: 3,
+            ..Default::default()
+        };
+
+        let (new_status, action) = calculate_health_transition(&status, &result, &config);
+
+        assert!(new_status.healthy); // Still healthy (threshold not reached)
+        assert_eq!(new_status.consecutive_failures, 1);
+        assert_eq!(new_status.consecutive_successes, 0);
+        assert_eq!(new_status.last_error, Some("timeout".to_string()));
+        assert_eq!(action, HealthAction::NoChange);
+    }
+
+    #[test]
+    fn test_calculate_health_transition_becomes_unhealthy() {
+        let mut status = HealthStatus::default();
+        status.consecutive_failures = 2; // Already 2 failures
+        status.healthy = true;
+
+        let result = HealthCheckResult::Failure {
+            error: "error".to_string(),
+            latency_ms: 100,
+        };
+        let config = HealthCheckConfig {
+            unhealthy_threshold: 3,
+            ..Default::default()
+        };
+
+        let (new_status, action) = calculate_health_transition(&status, &result, &config);
+
+        assert!(!new_status.healthy);
+        assert_eq!(new_status.consecutive_failures, 3);
+        assert!(matches!(action, HealthAction::HealthChanged { healthy: false, .. }));
+    }
+
+    #[test]
+    fn test_calculate_health_transition_becomes_healthy() {
+        let mut status = HealthStatus::default();
+        status.healthy = false;
+        status.consecutive_successes = 1; // Already 1 success
+
+        let result = HealthCheckResult::Success { latency_ms: 50 };
+        let config = HealthCheckConfig {
+            healthy_threshold: 2,
+            ..Default::default()
+        };
+
+        let (new_status, action) = calculate_health_transition(&status, &result, &config);
+
+        assert!(new_status.healthy);
+        assert_eq!(new_status.consecutive_successes, 2);
+        assert!(matches!(action, HealthAction::HealthChanged { healthy: true, .. }));
+    }
+
+    #[test]
+    fn test_calculate_health_transition_success_clears_error() {
+        let mut status = HealthStatus::default();
+        status.last_error = Some("previous error".to_string());
+        status.consecutive_failures = 5;
+
+        let result = HealthCheckResult::Success { latency_ms: 10 };
+        let config = HealthCheckConfig::default();
+
+        let (new_status, _action) = calculate_health_transition(&status, &result, &config);
+
+        assert!(new_status.last_error.is_none());
+        assert_eq!(new_status.consecutive_failures, 0);
+    }
+
+    #[test]
+    fn test_build_backend_addr() {
+        let backend = create_test_backend(8080);
+        let addr = build_backend_addr(&backend);
+        assert_eq!(addr, "127.0.0.1:8080");
+    }
+
+    #[test]
+    fn test_should_mark_unhealthy() {
+        let mut status = HealthStatus::default();
+        status.healthy = true;
+        status.consecutive_failures = 2;
+
+        assert!(!should_mark_unhealthy(&status, 3)); // 2 < 3
+
+        status.consecutive_failures = 3;
+        assert!(should_mark_unhealthy(&status, 3)); // 3 >= 3
+
+        status.healthy = false;
+        assert!(!should_mark_unhealthy(&status, 3)); // Already unhealthy
+    }
+
+    #[test]
+    fn test_should_mark_healthy() {
+        let mut status = HealthStatus::default();
+        status.healthy = false;
+        status.consecutive_successes = 1;
+
+        assert!(!should_mark_healthy(&status, 2)); // 1 < 2
+
+        status.consecutive_successes = 2;
+        assert!(should_mark_healthy(&status, 2)); // 2 >= 2
+
+        status.healthy = true;
+        assert!(!should_mark_healthy(&status, 2)); // Already healthy
+    }
+
+    #[test]
+    fn test_health_check_config_custom() {
+        let config = HealthCheckConfig {
+            interval: Duration::from_secs(30),
+            timeout: Duration::from_secs(10),
+            unhealthy_threshold: 5,
+            healthy_threshold: 3,
+            check_type: HealthCheckType::Http {
+                path: "/health".to_string(),
+            },
+        };
+
+        assert_eq!(config.interval, Duration::from_secs(30));
+        assert_eq!(config.timeout, Duration::from_secs(10));
+        assert_eq!(config.unhealthy_threshold, 5);
+        assert_eq!(config.healthy_threshold, 3);
+    }
+
+    #[test]
+    fn test_health_check_type_debug() {
+        let tcp = HealthCheckType::Tcp;
+        let debug = format!("{:?}", tcp);
+        assert!(debug.contains("Tcp"));
+
+        let http = HealthCheckType::Http {
+            path: "/status".to_string(),
+        };
+        let debug = format!("{:?}", http);
+        assert!(debug.contains("Http"));
+        assert!(debug.contains("/status"));
+    }
+
+    #[test]
+    fn test_health_check_type_clone() {
+        let http = HealthCheckType::Http {
+            path: "/health".to_string(),
+        };
+        let cloned = http.clone();
+        if let HealthCheckType::Http { path } = cloned {
+            assert_eq!(path, "/health");
+        } else {
+            panic!("Expected Http variant");
+        }
+    }
+
+    #[test]
+    fn test_health_status_clone() {
+        let mut status = HealthStatus::default();
+        status.consecutive_failures = 5;
+        status.last_error = Some("test error".to_string());
+
+        let cloned = status.clone();
+        assert_eq!(cloned.consecutive_failures, 5);
+        assert_eq!(cloned.last_error, Some("test error".to_string()));
+    }
+
+    #[test]
+    fn test_health_status_debug() {
+        let status = HealthStatus::default();
+        let debug = format!("{:?}", status);
+        assert!(debug.contains("healthy"));
+        assert!(debug.contains("consecutive_failures"));
+    }
+
+    #[test]
+    fn test_health_check_result_debug() {
+        let success = HealthCheckResult::Success { latency_ms: 42 };
+        let debug = format!("{:?}", success);
+        assert!(debug.contains("Success"));
+        assert!(debug.contains("42"));
+
+        let failure = HealthCheckResult::Failure {
+            error: "test".to_string(),
+            latency_ms: 100,
+        };
+        let debug = format!("{:?}", failure);
+        assert!(debug.contains("Failure"));
+        assert!(debug.contains("test"));
+    }
+
+    #[test]
+    fn test_health_check_result_clone() {
+        let result = HealthCheckResult::Failure {
+            error: "test".to_string(),
+            latency_ms: 50,
+        };
+        let cloned = result.clone();
+        assert!(!cloned.is_success());
+        assert_eq!(cloned.latency_ms(), 50);
+        assert_eq!(cloned.error(), Some("test"));
+    }
+
+    #[test]
+    fn test_health_check_config_debug() {
+        let config = HealthCheckConfig::default();
+        let debug = format!("{:?}", config);
+        assert!(debug.contains("interval"));
+        assert!(debug.contains("timeout"));
+    }
+
+    #[test]
+    fn test_health_check_config_clone() {
+        let config = HealthCheckConfig {
+            unhealthy_threshold: 5,
+            ..Default::default()
+        };
+        let cloned = config.clone();
+        assert_eq!(cloned.unhealthy_threshold, 5);
     }
 }

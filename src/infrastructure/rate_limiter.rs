@@ -449,4 +449,130 @@ mod tests {
         // but likely 100 since we have high refill rate
         assert!(total > 0);
     }
+
+    #[test]
+    fn test_rate_limit_result_eq() {
+        let allowed1 = RateLimitResult::Allowed { remaining: 5 };
+        let allowed2 = RateLimitResult::Allowed { remaining: 5 };
+        let allowed3 = RateLimitResult::Allowed { remaining: 10 };
+        let limited = RateLimitResult::Limited { retry_after_ms: 100 };
+
+        assert_eq!(allowed1, allowed2);
+        assert_ne!(allowed1, allowed3);
+        assert_ne!(allowed1, limited);
+    }
+
+    #[test]
+    fn test_rate_limit_result_debug() {
+        let allowed = RateLimitResult::Allowed { remaining: 42 };
+        let debug = format!("{:?}", allowed);
+        assert!(debug.contains("Allowed"));
+        assert!(debug.contains("42"));
+
+        let limited = RateLimitResult::Limited { retry_after_ms: 100 };
+        let debug = format!("{:?}", limited);
+        assert!(debug.contains("Limited"));
+        assert!(debug.contains("100"));
+    }
+
+    #[test]
+    fn test_rate_limit_result_clone() {
+        let result = RateLimitResult::Limited { retry_after_ms: 500 };
+        let cloned = result.clone();
+        assert_eq!(result, cloned);
+    }
+
+    #[test]
+    fn test_rate_limit_config_debug() {
+        let config = RateLimitConfig::default();
+        let debug = format!("{:?}", config);
+        assert!(debug.contains("max_requests"));
+        assert!(debug.contains("window"));
+        assert!(debug.contains("burst_size"));
+    }
+
+    #[test]
+    fn test_rate_limit_config_clone() {
+        let config = RateLimitConfig {
+            max_requests: 200,
+            window: Duration::from_secs(2),
+            burst_size: 20,
+        };
+        let cloned = config.clone();
+        assert_eq!(cloned.max_requests, 200);
+        assert_eq!(cloned.window, Duration::from_secs(2));
+        assert_eq!(cloned.burst_size, 20);
+    }
+
+    #[test]
+    fn test_remaining_unknown_client() {
+        let limiter = RateLimiter::new(RateLimitConfig {
+            burst_size: 42,
+            ..Default::default()
+        });
+
+        // Unknown client should have full burst
+        let remaining = limiter.remaining(test_ip(99));
+        assert_eq!(remaining, 42);
+    }
+
+    #[test]
+    fn test_ipv6_client() {
+        use std::net::Ipv6Addr;
+
+        let limiter = RateLimiter::new(RateLimitConfig {
+            burst_size: 3,
+            ..Default::default()
+        });
+
+        let ipv6 = IpAddr::V6(Ipv6Addr::LOCALHOST);
+
+        assert!(limiter.check(ipv6));
+        assert!(limiter.check(ipv6));
+        assert!(limiter.check(ipv6));
+        assert!(!limiter.check(ipv6));
+    }
+
+    #[test]
+    fn test_zero_cost_check() {
+        let limiter = RateLimiter::new(RateLimitConfig {
+            burst_size: 1,
+            ..Default::default()
+        });
+
+        let ip = test_ip(1);
+
+        // Cost of 0 should always succeed
+        assert!(limiter.check_with_cost(ip, 0));
+        assert!(limiter.check_with_cost(ip, 0));
+        assert_eq!(limiter.remaining(ip), 1);
+    }
+
+    #[test]
+    fn test_clear_nonexistent_client() {
+        let limiter = RateLimiter::new(RateLimitConfig::default());
+
+        // Should not panic
+        limiter.clear(test_ip(99));
+        assert_eq!(limiter.client_count(), 0);
+    }
+
+    #[test]
+    fn test_high_refill_rate() {
+        let limiter = RateLimiter::new(RateLimitConfig {
+            burst_size: 1,
+            max_requests: 1_000_000, // Very high
+            window: Duration::from_secs(1),
+        });
+
+        let ip = test_ip(1);
+
+        // Exhaust token
+        assert!(limiter.check(ip));
+        assert!(!limiter.check(ip));
+
+        // High refill rate should refill quickly
+        std::thread::sleep(Duration::from_millis(10));
+        assert!(limiter.check(ip));
+    }
 }

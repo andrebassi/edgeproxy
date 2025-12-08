@@ -70,6 +70,7 @@ impl TcpServer {
     }
 
     /// Handle a single client connection.
+    #[cfg_attr(coverage_nightly, coverage(off))]
     async fn handle_connection(
         service: Arc<ProxyService>,
         client_stream: TcpStream,

@@ -575,4 +575,40 @@ mod tests {
         // Should still be functional
         assert!(cb.get_metrics("b1").failures > 0);
     }
+
+    #[test]
+    fn test_allow_request_when_already_half_open() {
+        let cb = CircuitBreaker::new(CircuitBreakerConfig {
+            failure_threshold: 1,
+            reset_timeout: Duration::from_millis(1),
+            ..Default::default()
+        });
+
+        cb.record_failure("b1");
+        std::thread::sleep(Duration::from_millis(5));
+
+        // First call transitions to half-open
+        assert!(cb.allow_request("b1"));
+        assert_eq!(cb.get_state("b1"), CircuitState::HalfOpen);
+
+        // Second call while already half-open should also return true
+        assert!(cb.allow_request("b1"));
+        assert_eq!(cb.get_state("b1"), CircuitState::HalfOpen);
+    }
+
+    #[test]
+    fn test_record_success_when_open() {
+        let cb = CircuitBreaker::new(CircuitBreakerConfig {
+            failure_threshold: 1,
+            reset_timeout: Duration::from_secs(60), // Long timeout
+            ..Default::default()
+        });
+
+        cb.record_failure("b1");
+        assert_eq!(cb.get_state("b1"), CircuitState::Open);
+
+        // Recording success while open (edge case - should not change state)
+        cb.record_success("b1");
+        assert_eq!(cb.get_state("b1"), CircuitState::Open);
+    }
 }
