@@ -370,7 +370,7 @@ ps -o rss= -p $(pgrep edge-proxy)
 
 ## Future Improvements
 
-1. **Distributed bindings**: Sync across POPs via Redis/Corrosion
+1. **Distributed bindings**: Sync across POPs via built-in replication
 2. **Configurable keys**: Support for headers, cookies
 3. **Weighted affinity**: Probability-based stickiness
 4. **Metrics export**: Prometheus counters for bindings

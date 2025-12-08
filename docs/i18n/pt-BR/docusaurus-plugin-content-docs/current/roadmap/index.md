@@ -6,8 +6,8 @@ sidebar_position: 0
 
 Este documento descreve a evolução planejada do edgeProxy em direção a uma plataforma de edge computing totalmente distribuída e auto-recuperável.
 
-:::tip Versão Atual: 0.2.0
-O edgeProxy agora inclui **terminação TLS**, **API de Auto-Discovery**, **DNS Interno** e **integração com Corrosion**. Veja [Configuração](../configuration) para detalhes.
+:::tip Versão Atual: 0.3.0
+O edgeProxy agora inclui **terminação TLS**, **API de Auto-Discovery**, **DNS Interno** e **replicação built-in** (SWIM gossip + QUIC transport). Veja [Configuração](../configuration) para detalhes.
 :::
 
 ## Princípios de Design
@@ -34,7 +34,7 @@ O edgeProxy segue padrões comprovados de plataformas edge em produção:
 |------------|------------|-----------|
 | **Roteamento de Tráfego** | GeoDNS | Anycast BGP |
 | **Edge Proxy** | edgeProxy (Rust) | edgeProxy (Rust) |
-| **Control Plane** | routing.db (local) | Corrosion (replicado) |
+| **Control Plane** | routing.db (local) | Replicação built-in (replicado) |
 | **Rede Privada** | WireGuard IPv4 | WireGuard IPv6 (6PN) |
 | **Service Discovery** | Estático (manual) | Dinâmico (auto-registro) |
 | **DNS Interno** | Nenhum | domínios .internal |
@@ -48,11 +48,11 @@ As seguintes funcionalidades foram implementadas e estão documentadas em [Confi
 
 | Funcionalidade | Descrição | Documentação |
 |----------------|-----------|--------------|
-| **Terminação TLS** | Suporte HTTPS com certificados auto-gerados ou customizados | [Configuração](../configuration#configurações-tls) |
-| **DNS Interno** | Resolução de domínios `.internal` geo-aware | [Configuração](../configuration#servidor-dns-interno) |
-| **API de Auto-Discovery** | Registro/desregistro dinâmico de backends | [Configuração](../configuration#api-de-auto-discovery) |
-| **Integração Corrosion** | Replicação SQLite distribuída entre POPs | [Configuração](../configuration#control-plane-distribuído-corrosion) |
-| **358 Testes Unitários** | Cobertura abrangente de testes (99.38%) | [Testes](../testing#testes-unitários) |
+| **Terminação TLS** | Suporte HTTPS com certificados auto-gerados ou customizados | [Variáveis de Ambiente](../configuration/environment-variables#configurações-tls) |
+| **DNS Interno** | Resolução de domínios `.internal` geo-aware | [Servidor DNS](../configuration/dns-server) |
+| **API de Auto-Discovery** | Registro/desregistro dinâmico de backends | [API de Auto-Discovery](../configuration/auto-discovery-api) |
+| **Replicação Built-in** | Replicação SQLite distribuída entre POPs (SWIM + QUIC) | [Replicação Built-in](../configuration/replication) |
+| **490 Testes Unitários** | Cobertura abrangente de testes | [Testes](../testing) |
 
 ---
 

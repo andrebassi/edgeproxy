@@ -62,8 +62,8 @@ impl TlsConfig {
         ];
 
         let cert = rcgen::generate_simple_self_signed(subject_alt_names)?;
-        let cert_der = CertificateDer::from(cert.serialize_der()?);
-        let key_der = PrivateKeyDer::try_from(cert.serialize_private_key_der())
+        let cert_der = CertificateDer::from(cert.cert.der().to_vec());
+        let key_der = PrivateKeyDer::try_from(cert.key_pair.serialize_der())
             .map_err(|e| anyhow::anyhow!("failed to serialize key: {:?}", e))?;
 
         Self::from_certs_and_key(vec![cert_der], key_der)
@@ -307,6 +307,15 @@ mod tests {
     use crate::domain::ports::BackendRepository;
     use crate::domain::value_objects::RegionCode;
     use async_trait::async_trait;
+    use std::sync::Once;
+
+    // Install crypto provider once for all tests
+    static INIT: Once = Once::new();
+    fn setup_crypto_provider() {
+        INIT.call_once(|| {
+            let _ = rustls::crypto::ring::default_provider().install_default();
+        });
+    }
 
     // Mock backend repository for testing
     struct MockBackendRepository {
@@ -369,30 +378,35 @@ mod tests {
 
     #[test]
     fn test_self_signed_certificate_generation() {
+        setup_crypto_provider();
         let config = TlsConfig::self_signed("test.internal");
         assert!(config.is_ok());
     }
 
     #[test]
     fn test_self_signed_with_custom_domain() {
+        setup_crypto_provider();
         let config = TlsConfig::self_signed("myapp.internal");
         assert!(config.is_ok());
     }
 
     #[test]
     fn test_self_signed_with_localhost() {
+        setup_crypto_provider();
         let config = TlsConfig::self_signed("localhost");
         assert!(config.is_ok());
     }
 
     #[test]
     fn test_self_signed_with_ip_address() {
+        setup_crypto_provider();
         let config = TlsConfig::self_signed("192.168.1.1");
         assert!(config.is_ok());
     }
 
     #[test]
     fn test_from_pem_files_nonexistent() {
+        setup_crypto_provider();
         let result = TlsConfig::from_pem_files(
             Path::new("/nonexistent/cert.pem"),
             Path::new("/nonexistent/key.pem"),
@@ -402,6 +416,7 @@ mod tests {
 
     #[test]
     fn test_tls_server_new() {
+        setup_crypto_provider();
         let proxy_service = create_proxy_service(vec![create_test_backend("test-1")]);
         let tls_config = TlsConfig::self_signed("test.internal").unwrap();
         let server = TlsServer::new(
@@ -415,6 +430,7 @@ mod tests {
 
     #[test]
     fn test_tls_server_new_with_custom_config() {
+        setup_crypto_provider();
         let proxy_service = create_proxy_service(vec![create_test_backend("test-1")]);
         let tls_config = TlsConfig::self_signed("custom.domain").unwrap();
         let server = TlsServer::new(
@@ -494,6 +510,7 @@ mod tests {
 
     #[test]
     fn test_tls_config_clone() {
+        setup_crypto_provider();
         let config = TlsConfig::self_signed("test.internal").unwrap();
         let cloned = config.clone();
         // TlsConfig should be cloneable
@@ -504,6 +521,7 @@ mod tests {
 
     #[tokio::test]
     async fn test_handle_connection_no_backend() {
+        setup_crypto_provider();
         // Create proxy service with no backends
         let proxy_service = create_proxy_service(vec![]);
         let client_addr: SocketAddr = "192.168.1.100:12345".parse().unwrap();
@@ -559,6 +577,7 @@ mod tests {
 
     #[tokio::test]
     async fn test_handle_connection_with_backend() {
+        setup_crypto_provider();
         use tokio::sync::oneshot;
 
         // Start a mock backend server
@@ -648,6 +667,7 @@ mod tests {
 
     #[tokio::test]
     async fn test_handle_connection_backend_unreachable() {
+        setup_crypto_provider();
         // Backend on a port that nothing is listening on
         let backend = Backend {
             id: "test-1".to_string(),
@@ -711,6 +731,7 @@ mod tests {
 
     #[tokio::test]
     async fn test_handle_connection_with_loopback_ip() {
+        setup_crypto_provider();
         use tokio::sync::oneshot;
 
         // Start mock backend
@@ -797,6 +818,7 @@ mod tests {
 
     #[tokio::test]
     async fn test_run_accepts_tls_connection() {
+        setup_crypto_provider();
         use tokio::sync::oneshot;
 
         let backend_listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
@@ -884,6 +906,7 @@ mod tests {
 
     #[tokio::test]
     async fn test_handle_connection_with_ipv6_backend() {
+        setup_crypto_provider();
         // Create backend with IPv6 address
         let backend = Backend {
             id: "ipv6-backend".to_string(),
@@ -946,6 +969,7 @@ mod tests {
 
     #[tokio::test]
     async fn test_run_handles_tls_handshake_failure() {
+        setup_crypto_provider();
         // This tests that the server gracefully handles TLS handshake failures
         let backend = Backend {
             id: "test-1".to_string(),
@@ -998,6 +1022,7 @@ mod tests {
 
     #[tokio::test]
     async fn test_proxy_bidirectional_with_errors() {
+        setup_crypto_provider();
         // Test proxy_bidirectional with a backend that closes immediately
         let backend_listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
         let backend_addr = backend_listener.local_addr().unwrap();
@@ -1103,6 +1128,7 @@ mod tests {
 
     #[tokio::test]
     async fn test_run_multiple_connections() {
+        setup_crypto_provider();
         let backend_listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
         let backend_addr = backend_listener.local_addr().unwrap();
 
@@ -1183,6 +1209,7 @@ mod tests {
 
     #[tokio::test]
     async fn test_from_pem_files_success() {
+        setup_crypto_provider();
         use std::io::Write;
         use tempfile::NamedTempFile;
 
@@ -1193,13 +1220,13 @@ mod tests {
         // Write cert to temp file
         let mut cert_file = NamedTempFile::new().unwrap();
         writeln!(cert_file, "-----BEGIN CERTIFICATE-----").unwrap();
-        writeln!(cert_file, "{}", base64_encode(&cert.serialize_der().unwrap())).unwrap();
+        writeln!(cert_file, "{}", base64_encode(cert.cert.der())).unwrap();
         writeln!(cert_file, "-----END CERTIFICATE-----").unwrap();
 
         // Write key to temp file
         let mut key_file = NamedTempFile::new().unwrap();
         writeln!(key_file, "-----BEGIN PRIVATE KEY-----").unwrap();
-        writeln!(key_file, "{}", base64_encode(&cert.serialize_private_key_der())).unwrap();
+        writeln!(key_file, "{}", base64_encode(&cert.key_pair.serialize_der())).unwrap();
         writeln!(key_file, "-----END PRIVATE KEY-----").unwrap();
 
         // Test from_pem_files

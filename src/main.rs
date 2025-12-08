@@ -9,10 +9,11 @@ mod application;
 mod config;
 mod domain;
 mod infrastructure;
+mod replication;
 
 use crate::adapters::inbound::{ApiServer, DnsServer, TcpServer, TlsConfig, TlsServer};
 use crate::adapters::outbound::{
-    CorrosionBackendRepository, CorrosionConfig, DashMapBindingRepository, DashMapMetricsStore,
+    DashMapBindingRepository, DashMapMetricsStore,
     MaxMindGeoResolver, SqliteBackendRepository,
 };
 use crate::domain::ports::BackendRepository;
@@ -20,6 +21,7 @@ use crate::application::ProxyService;
 use crate::config::load_config;
 use crate::domain::ports::GeoResolver;
 use crate::domain::value_objects::RegionCode;
+use crate::replication::{ReplicationAgent, ReplicationConfig};
 use std::path::Path;
 use std::sync::Arc;
 use std::time::Duration;
@@ -54,21 +56,9 @@ async fn main() -> anyhow::Result<()> {
 
     // 1. Create outbound adapters
 
-    // Backend repository - choose between SQLite (local) or Corrosion (distributed)
-    let backend_repo: Arc<dyn BackendRepository> = if cfg.corrosion_enabled {
-        tracing::info!(
-            "using Corrosion backend repository (api_url={}, poll_secs={})",
-            cfg.corrosion_api_url,
-            cfg.corrosion_poll_secs
-        );
-        let corrosion_config = CorrosionConfig {
-            api_url: cfg.corrosion_api_url.clone(),
-            poll_interval_secs: cfg.corrosion_poll_secs,
-        };
-        let repo = Arc::new(CorrosionBackendRepository::new(corrosion_config));
-        repo.start_sync();
-        repo
-    } else {
+    // Backend repository - uses SQLite for local storage
+    // When replication is enabled, the replication module syncs the state.db across nodes
+    let backend_repo: Arc<dyn BackendRepository> = {
         tracing::info!("using SQLite backend repository (path={})", cfg.db_path);
         let repo = Arc::new(SqliteBackendRepository::new());
         repo.start_sync(cfg.db_path.clone(), cfg.db_reload_secs);
@@ -81,6 +71,34 @@ async fn main() -> anyhow::Result<()> {
         Duration::from_secs(cfg.binding_ttl_secs),
         Duration::from_secs(cfg.binding_gc_interval_secs),
     );
+
+    // Start built-in replication (if enabled)
+    if cfg.replication_enabled {
+        let node_id = cfg.replication_node_id.clone()
+            .unwrap_or_else(|| format!("{}-{}", cfg.region, uuid::Uuid::new_v4().to_string()[..8].to_string()));
+
+        let replication_config = ReplicationConfig::new(&node_id)
+            .gossip_addr(cfg.replication_gossip_addr.parse()?)
+            .transport_addr(cfg.replication_transport_addr.parse()?)
+            .bootstrap_peers(cfg.replication_bootstrap_peers.clone())
+            .db_path(&cfg.replication_db_path)
+            .cluster_name(&cfg.replication_cluster_name);
+
+        let mut agent = ReplicationAgent::new(replication_config)?;
+
+        tracing::info!(
+            "starting built-in replication node_id={} gossip={} transport={}",
+            node_id,
+            cfg.replication_gossip_addr,
+            cfg.replication_transport_addr
+        );
+
+        if let Err(e) = agent.start().await {
+            tracing::error!("failed to start replication agent: {:?}", e);
+        } else {
+            tracing::info!("built-in replication started");
+        }
+    }
 
     // GeoIP resolver (MaxMind)
     let geo_resolver: Option<Arc<dyn GeoResolver>> = match &cfg.geoip_path {

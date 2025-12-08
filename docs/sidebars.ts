@@ -39,7 +39,7 @@ const sidebars: SidebarsConfig = {
         'configuration/database-schema',
         'configuration/dns-server',
         'configuration/auto-discovery-api',
-        'configuration/corrosion',
+        'configuration/replication',
         'configuration/infrastructure',
       ],
     },

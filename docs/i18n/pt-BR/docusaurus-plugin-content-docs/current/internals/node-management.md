@@ -8,7 +8,7 @@ Este documento descreve como gerenciar nodes backend no edgeProxy usando os coma
 
 ## Visão Geral
 
-O edgeProxy descobre backends dinamicamente a partir do banco de dados SQLite `routing.db`. O banco é tipicamente replicado em todos os POPs via Corrosion (ou sistema similar de estado distribuído). Você pode gerenciar nodes usando os comandos do Taskfile.
+O edgeProxy descobre backends dinamicamente a partir do banco de dados SQLite `routing.db`. O banco é replicado em todos os POPs via sistema de replicação built-in (SWIM gossip + QUIC transport). Você pode gerenciar nodes usando os comandos do Taskfile.
 
 ## Schema do Node
 

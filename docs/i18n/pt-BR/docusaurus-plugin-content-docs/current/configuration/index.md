@@ -14,7 +14,7 @@ O edgeProxy é configurado inteiramente através de variáveis de ambiente. Esta
 | [Schema do Banco de Dados](./database-schema) | Estrutura da tabela de roteamento |
 | [DNS Interno](./dns-server) | Resolução geo-aware do domínio `.internal` |
 | [API de Auto-Discovery](./auto-discovery-api) | Registro dinâmico de backends |
-| [Control Plane Distribuído](./corrosion) | SQLite distribuído com Corrosion |
+| [Replicação Built-in](./replication) | Sync distribuído SQLite (SWIM + QUIC) |
 | [Componentes de Infraestrutura](./infrastructure) | Rate limiting, circuit breaker, métricas |
 
 ## Quick Start

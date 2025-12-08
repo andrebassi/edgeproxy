@@ -58,13 +58,20 @@ All edgeProxy settings are configured via environment variables.
 | `EDGEPROXY_API_LISTEN_ADDR` | `0.0.0.0:8081` | API listen address |
 | `EDGEPROXY_HEARTBEAT_TTL_SECS` | `60` | Backend heartbeat TTL |
 
-## Corrosion Settings (Distributed SQLite)
+## Built-in Replication Settings
 
 | Variable | Default | Description |
 |----------|---------|-------------|
-| `EDGEPROXY_CORROSION_ENABLED` | `false` | Enable Corrosion backend |
-| `EDGEPROXY_CORROSION_API_URL` | `http://localhost:8080` | Corrosion HTTP API URL |
-| `EDGEPROXY_CORROSION_POLL_SECS` | `5` | Polling interval for backend sync |
+| `EDGEPROXY_REPLICATION_ENABLED` | `false` | Enable built-in replication |
+| `EDGEPROXY_REPLICATION_NODE_ID` | (hostname) | Unique node identifier |
+| `EDGEPROXY_REPLICATION_GOSSIP_ADDR` | `0.0.0.0:4001` | UDP address for gossip protocol |
+| `EDGEPROXY_REPLICATION_TRANSPORT_ADDR` | `0.0.0.0:4002` | QUIC address for data sync |
+| `EDGEPROXY_REPLICATION_BOOTSTRAP_PEERS` | (none) | Comma-separated list of peer addresses |
+| `EDGEPROXY_REPLICATION_GOSSIP_INTERVAL_MS` | `1000` | Gossip ping interval |
+| `EDGEPROXY_REPLICATION_SYNC_INTERVAL_MS` | `5000` | Sync flush interval |
+| `EDGEPROXY_REPLICATION_CLUSTER_NAME` | `edgeproxy` | Cluster name for isolation |
+
+See [Built-in Replication](./replication) for detailed documentation.
 
 ## GeoIP
 
