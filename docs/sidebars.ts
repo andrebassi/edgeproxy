@@ -43,9 +43,29 @@ const sidebars: SidebarsConfig = {
         'configuration/infrastructure',
       ],
     },
-    'testing',
-    'performance',
-    'benchmark',
+    {
+      type: 'category',
+      label: 'Testing',
+      link: {
+        type: 'doc',
+        id: 'testing',
+      },
+      items: [
+        'performance',
+        'benchmark',
+        {
+          type: 'category',
+          label: 'Integration Tests',
+          collapsed: false,
+          items: [
+            'tests/flyio-integration',
+            'tests/auto-discovery',
+            'tests/load-testing',
+            'tests/stress-testing',
+          ],
+        },
+      ],
+    },
     {
       type: 'category',
       label: 'Roadmap',
