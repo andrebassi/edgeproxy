@@ -1,0 +1,112 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 750 450">
+  <defs>
+    <linearGradient id="popGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" style="stop-color:#3B82F6;stop-opacity:1" />
+      <stop offset="100%" style="stop-color:#1D4ED8;stop-opacity:1" />
+    </linearGradient>
+    <linearGradient id="corrosionGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" style="stop-color:#F97316;stop-opacity:1" />
+      <stop offset="100%" style="stop-color:#EA580C;stop-opacity:1" />
+    </linearGradient>
+    <filter id="shadow" x="-20%" y="-20%" width="140%" height="140%">
+      <feDropShadow dx="0" dy="4" stdDeviation="6" flood-opacity="0.15"/>
+    </filter>
+  </defs>
+
+  <!-- Background -->
+  <rect width="750" height="450" fill="#0f172a" rx="12"/>
+
+  <!-- Title -->
+  <text x="375" y="30" text-anchor="middle" fill="white" font-family="system-ui" font-size="18" font-weight="600">Corrosion - Multi-POP Deployment Topology</text>
+
+  <!-- POP SA Box -->
+  <g filter="url(#shadow)">
+    <rect x="30" y="55" width="220" height="110" rx="10" fill="#1E293B" stroke="#334155" stroke-width="2"/>
+    <text x="140" y="80" text-anchor="middle" fill="#94A3B8" font-family="system-ui" font-size="12" font-weight="500">POP São Paulo (sa)</text>
+
+    <!-- edgeProxy -->
+    <rect x="45" y="92" width="85" height="55" rx="6" fill="url(#popGrad)"/>
+    <text x="87" y="115" text-anchor="middle" fill="white" font-family="system-ui" font-size="11" font-weight="600">edgeProxy</text>
+    <text x="87" y="130" text-anchor="middle" fill="rgba(255,255,255,0.7)" font-family="ui-monospace" font-size="9">:8080 TCP</text>
+    <text x="87" y="141" text-anchor="middle" fill="rgba(255,255,255,0.7)" font-family="ui-monospace" font-size="9">:8081 API</text>
+
+    <!-- Arrow -->
+    <line x1="135" y1="120" x2="150" y2="120" stroke="#64748B" stroke-width="2"/>
+    <polygon points="155,120 148,115 148,125" fill="#64748B"/>
+
+    <!-- Corrosion -->
+    <rect x="160" y="92" width="80" height="55" rx="6" fill="url(#corrosionGrad)"/>
+    <text x="200" y="115" text-anchor="middle" fill="white" font-family="system-ui" font-size="11" font-weight="600">Corrosion</text>
+    <text x="200" y="130" text-anchor="middle" fill="rgba(255,255,255,0.7)" font-family="ui-monospace" font-size="9">:8090 API</text>
+    <text x="200" y="141" text-anchor="middle" fill="rgba(255,255,255,0.7)" font-family="ui-monospace" font-size="9">:4001 gossip</text>
+  </g>
+
+  <!-- POP US Box -->
+  <g filter="url(#shadow)">
+    <rect x="265" y="170" width="220" height="110" rx="10" fill="#1E293B" stroke="#334155" stroke-width="2"/>
+    <text x="375" y="195" text-anchor="middle" fill="#94A3B8" font-family="system-ui" font-size="12" font-weight="500">POP Virginia (us)</text>
+
+    <!-- edgeProxy -->
+    <rect x="280" y="207" width="85" height="55" rx="6" fill="url(#popGrad)"/>
+    <text x="322" y="230" text-anchor="middle" fill="white" font-family="system-ui" font-size="11" font-weight="600">edgeProxy</text>
+    <text x="322" y="245" text-anchor="middle" fill="rgba(255,255,255,0.7)" font-family="ui-monospace" font-size="9">:8080 TCP</text>
+    <text x="322" y="256" text-anchor="middle" fill="rgba(255,255,255,0.7)" font-family="ui-monospace" font-size="9">:8081 API</text>
+
+    <!-- Arrow -->
+    <line x1="370" y1="235" x2="385" y2="235" stroke="#64748B" stroke-width="2"/>
+    <polygon points="390,235 383,230 383,240" fill="#64748B"/>
+
+    <!-- Corrosion -->
+    <rect x="395" y="207" width="80" height="55" rx="6" fill="url(#corrosionGrad)"/>
+    <text x="435" y="230" text-anchor="middle" fill="white" font-family="system-ui" font-size="11" font-weight="600">Corrosion</text>
+    <text x="435" y="245" text-anchor="middle" fill="rgba(255,255,255,0.7)" font-family="ui-monospace" font-size="9">:8090 API</text>
+    <text x="435" y="256" text-anchor="middle" fill="rgba(255,255,255,0.7)" font-family="ui-monospace" font-size="9">:4001 gossip</text>
+  </g>
+
+  <!-- POP EU Box -->
+  <g filter="url(#shadow)">
+    <rect x="500" y="285" width="220" height="110" rx="10" fill="#1E293B" stroke="#334155" stroke-width="2"/>
+    <text x="610" y="310" text-anchor="middle" fill="#94A3B8" font-family="system-ui" font-size="12" font-weight="500">POP Frankfurt (eu)</text>
+
+    <!-- edgeProxy -->
+    <rect x="515" y="322" width="85" height="55" rx="6" fill="url(#popGrad)"/>
+    <text x="557" y="345" text-anchor="middle" fill="white" font-family="system-ui" font-size="11" font-weight="600">edgeProxy</text>
+    <text x="557" y="360" text-anchor="middle" fill="rgba(255,255,255,0.7)" font-family="ui-monospace" font-size="9">:8080 TCP</text>
+    <text x="557" y="371" text-anchor="middle" fill="rgba(255,255,255,0.7)" font-family="ui-monospace" font-size="9">:8081 API</text>
+
+    <!-- Arrow -->
+    <line x1="605" y1="350" x2="620" y2="350" stroke="#64748B" stroke-width="2"/>
+    <polygon points="625,350 618,345 618,355" fill="#64748B"/>
+
+    <!-- Corrosion -->
+    <rect x="630" y="322" width="80" height="55" rx="6" fill="url(#corrosionGrad)"/>
+    <text x="670" y="345" text-anchor="middle" fill="white" font-family="system-ui" font-size="11" font-weight="600">Corrosion</text>
+    <text x="670" y="360" text-anchor="middle" fill="rgba(255,255,255,0.7)" font-family="ui-monospace" font-size="9">:8090 API</text>
+    <text x="670" y="371" text-anchor="middle" fill="rgba(255,255,255,0.7)" font-family="ui-monospace" font-size="9">:4001 gossip</text>
+  </g>
+
+  <!-- Gossip connections -->
+  <!-- SA to US -->
+  <line x1="200" y1="152" x2="435" y2="202" stroke="#22C55E" stroke-width="2" stroke-dasharray="6,4"/>
+  <circle cx="318" cy="177" r="4" fill="#22C55E"/>
+
+  <!-- US to EU -->
+  <line x1="435" y1="267" x2="670" y2="317" stroke="#22C55E" stroke-width="2" stroke-dasharray="6,4"/>
+  <circle cx="552" cy="292" r="4" fill="#22C55E"/>
+
+  <!-- SA to EU (direct) -->
+  <path d="M 200 152 Q 200 340 625 340" fill="none" stroke="#22C55E" stroke-width="2" stroke-dasharray="6,4"/>
+  <circle cx="400" cy="280" r="4" fill="#22C55E"/>
+
+  <!-- Legend -->
+  <g transform="translate(30, 410)">
+    <rect x="0" y="0" width="12" height="12" rx="2" fill="url(#popGrad)"/>
+    <text x="18" y="10" fill="#94A3B8" font-family="system-ui" font-size="10">edgeProxy</text>
+
+    <rect x="100" y="0" width="12" height="12" rx="2" fill="url(#corrosionGrad)"/>
+    <text x="118" y="10" fill="#94A3B8" font-family="system-ui" font-size="10">Corrosion</text>
+
+    <line x1="200" y1="6" x2="230" y2="6" stroke="#22C55E" stroke-width="2" stroke-dasharray="6,4"/>
+    <text x="238" y="10" fill="#94A3B8" font-family="system-ui" font-size="10">Gossip Protocol (port 4001)</text>
+  </g>
+</svg>

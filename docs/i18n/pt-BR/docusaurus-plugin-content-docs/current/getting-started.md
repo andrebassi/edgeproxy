@@ -32,7 +32,7 @@ git clone https://github.com/andrebassi/edgeproxy.git
 cd edgeproxy
 
 # Build do binário release
-task build
+task build:release
 
 # Verificar instalação
 ./target/release/edge-proxy --help
@@ -42,37 +42,17 @@ task build
 
 ```bash
 # Build da imagem Docker
-task docker-build
+task docker:build
 
 # Iniciar ambiente multi-região
-task docker-up
+task docker:up
 ```
 
 ## Estrutura do Projeto
 
-```
-edgeproxy/
-├── Cargo.toml              # Dependências Rust
-├── Taskfile.yaml           # Automação de tasks
-├── routing.db              # Banco de dados SQLite de roteamento
-├── sql/
-│   └── create_routing_db.sql   # Schema + dados iniciais
-├── src/
-│   ├── main.rs             # Ponto de entrada
-│   ├── config.rs           # Carregamento de configuração
-│   ├── model.rs            # Estruturas de dados
-│   ├── db.rs               # Sync do SQLite
-│   ├── lb.rs               # Load balancer
-│   ├── state.rs            # Estado compartilhado + GeoIP
-│   └── proxy.rs            # Lógica do proxy TCP
-├── docker/
-│   ├── init-routing.sql    # Config de roteamento Docker
-│   └── routing-docker.db   # DB pré-construído para Docker
-├── tests/
-│   ├── mock_backend.py     # Servidor backend de teste
-│   └── test_docker.sh      # Suite de testes Docker
-└── docs/                   # Documentação Docusaurus
-```
+O edgeProxy usa **Arquitetura Hexagonal** (Ports & Adapters):
+
+![Estrutura do Projeto](/img/project-structure.svg)
 
 ## Primeira Execução
 
@@ -80,7 +60,7 @@ edgeproxy/
 
 ```bash
 # Criar banco de dados com backends de exemplo
-task db-init
+task db:init
 ```
 
 Isso cria `routing.db` com o seguinte schema:
@@ -104,10 +84,10 @@ CREATE TABLE backends (
 
 ```bash
 # Executar com configuração padrão (region=sa, port=8080)
-task run
+task run:dev
 
 # Ou com configurações customizadas
-EDGEPROXY_REGION=us EDGEPROXY_LISTEN_ADDR=0.0.0.0:9000 task run
+EDGEPROXY_REGION=us EDGEPROXY_LISTEN_ADDR=0.0.0.0:9000 task run:dev
 ```
 
 ### 3. Testar Conexão
@@ -126,51 +106,88 @@ echo "Olá" | nc localhost 8080
 ### Testes Unitários
 
 ```bash
-task test
+# Executar todos os testes (485 testes)
+task test:all
+
+# Executar com cobertura
+task test:coverage
 ```
 
 ### Simulação Local Multi-Região
 
 ```bash
 # Terminal 1: Iniciar mock backends
-task local-env
+task local:env
 
 # Terminal 2: Iniciar proxy
-task run-sa
+task run:sa
 
 # Terminal 3: Executar testes
-task local-test
+task local:test
 ```
 
 ### Testes Docker
 
 ```bash
 # Suite completa de testes Docker
-task docker-build
-task docker-up
-task docker-test
+task docker:build
+task docker:up
+task docker:test
 
 # Limpeza
-task docker-down
+task docker:down
 ```
 
 ## Tasks Disponíveis
 
+Execute `task --list` para ver todas as tasks disponíveis. Principais categorias:
+
+### Build
+
 | Task | Descrição |
 |------|-----------|
-| `task build` | Build do binário release |
-| `task run` | Executar com config padrão |
-| `task run-sa` | Executar como POP SA |
-| `task run-us` | Executar como POP US |
-| `task run-eu` | Executar como POP EU |
-| `task test` | Executar testes unitários |
-| `task db-init` | Inicializar routing.db |
-| `task docker-build` | Build das imagens Docker |
-| `task docker-up` | Iniciar ambiente Docker |
-| `task docker-down` | Parar ambiente Docker |
-| `task docker-test` | Executar suite de testes Docker |
-| `task docker-logs` | Ver logs dos containers |
-| `task docs-dev` | Iniciar servidor de documentação |
+| `task build:release` | Build do binário release |
+| `task build:linux` | Cross-compile para Linux AMD64 |
+| `task build:all` | Build para todas as plataformas |
+
+### Run
+
+| Task | Descrição |
+|------|-----------|
+| `task run:dev` | Executar com config padrão |
+| `task run:sa` | Executar como POP SA |
+| `task run:us` | Executar como POP US |
+| `task run:eu` | Executar como POP EU |
+
+### Test
+
+| Task | Descrição |
+|------|-----------|
+| `task test:all` | Executar todos os testes unitários |
+| `task test:coverage` | Executar com relatório de cobertura |
+
+### Database
+
+| Task | Descrição |
+|------|-----------|
+| `task db:init` | Inicializar routing.db |
+| `task db:reset` | Resetar para estado inicial |
+
+### Docker
+
+| Task | Descrição |
+|------|-----------|
+| `task docker:build` | Build das imagens Docker |
+| `task docker:up` | Iniciar ambiente Docker |
+| `task docker:down` | Parar ambiente Docker |
+| `task docker:test` | Executar suite de testes Docker |
+
+### Documentação
+
+| Task | Descrição |
+|------|-----------|
+| `task docs:serve` | Build e serve docs (EN + PT-BR) |
+| `task docs:dev` | Modo dev (apenas EN, hot reload) |
 
 ## Próximos Passos
 
