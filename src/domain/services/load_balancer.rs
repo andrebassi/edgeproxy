@@ -587,4 +587,143 @@ mod tests {
 
         assert!(scores.is_empty());
     }
+
+    #[test]
+    fn test_calculate_all_scores_with_zero_weight() {
+        let mut backend = create_backend("br-1", "sa", "BR", true);
+        backend.weight = 0; // should be treated as 1
+
+        let backends = vec![backend];
+
+        let scores = LoadBalancer::calculate_all_scores(
+            &backends,
+            &RegionCode::SouthAmerica,
+            None,
+            |_| 50,
+        );
+
+        assert_eq!(scores.len(), 1);
+        assert_eq!(scores[0].0, "br-1");
+    }
+
+    #[test]
+    fn test_calculate_all_scores_with_zero_soft_limit() {
+        let mut backend = create_backend("br-1", "sa", "BR", true);
+        backend.soft_limit = 0; // should be treated as 1
+
+        let backends = vec![backend];
+
+        let scores = LoadBalancer::calculate_all_scores(
+            &backends,
+            &RegionCode::SouthAmerica,
+            None,
+            |_| 0,
+        );
+
+        assert_eq!(scores.len(), 1);
+        assert_eq!(scores[0].0, "br-1");
+    }
+
+    #[test]
+    fn test_calculate_all_scores_with_client_geo() {
+        let backends = vec![
+            create_backend("br-1", "sa", "BR", true),
+            create_backend("ar-1", "sa", "AR", true),
+            create_backend("jp-1", "ap", "JP", true),
+        ];
+
+        let client_geo = GeoInfo::new("BR".to_string(), RegionCode::SouthAmerica);
+
+        let scores = LoadBalancer::calculate_all_scores(
+            &backends,
+            &RegionCode::Europe, // local POP in Europe
+            Some(&client_geo),
+            |_| 0,
+        );
+
+        assert_eq!(scores.len(), 3);
+
+        // br-1 should have score 0 (same country as client)
+        let br_score = scores.iter().find(|(id, _)| id == "br-1").unwrap().1;
+        assert!(br_score < 100.0); // geo_score 0 * 100 = 0
+
+        // ar-1 should have score ~100 (same region as client, geo_score = 1)
+        let ar_score = scores.iter().find(|(id, _)| id == "ar-1").unwrap().1;
+        assert!(ar_score >= 100.0 && ar_score < 200.0);
+
+        // jp-1 should have score ~300 (different region from client and local POP, geo_score = 3)
+        let jp_score = scores.iter().find(|(id, _)| id == "jp-1").unwrap().1;
+        assert!(jp_score >= 300.0);
+    }
+
+    #[test]
+    fn test_calculate_all_scores_local_region_fallback() {
+        let backends = vec![
+            create_backend("eu-1", "eu", "DE", true),
+            create_backend("jp-1", "ap", "JP", true),
+        ];
+
+        // No client geo - should use local region
+        let scores = LoadBalancer::calculate_all_scores(
+            &backends,
+            &RegionCode::Europe, // local POP
+            None,
+            |_| 0,
+        );
+
+        assert_eq!(scores.len(), 2);
+
+        // eu-1 should have score ~200 (same as local region, geo_score = 2)
+        let eu_score = scores.iter().find(|(id, _)| id == "eu-1").unwrap().1;
+        assert!(eu_score >= 200.0 && eu_score < 300.0);
+
+        // jp-1 should have score ~300 (different region, geo_score = 3)
+        let jp_score = scores.iter().find(|(id, _)| id == "jp-1").unwrap().1;
+        assert!(jp_score >= 300.0);
+    }
+
+    #[test]
+    fn test_pick_backend_keeps_best_when_second_is_worse() {
+        // First backend is best, second is worse - exercises the `_ => {}` branch
+        let backends = vec![
+            create_backend("br-1", "sa", "BR", true),  // geo_score 0 (best)
+            create_backend("jp-1", "ap", "JP", true),  // geo_score 3 (worst)
+        ];
+
+        let client_geo = GeoInfo::new("BR".to_string(), RegionCode::SouthAmerica);
+
+        let result = LoadBalancer::pick_backend(
+            &backends,
+            &RegionCode::Europe,
+            Some(&client_geo),
+            |_| 0,
+        );
+
+        assert!(result.is_some());
+        // Should pick br-1 because it's processed first and is best
+        assert_eq!(result.unwrap().id, "br-1");
+    }
+
+    #[test]
+    fn test_pick_backend_multiple_same_score() {
+        // Multiple backends with equal score - exercises the `_ => {}` branch
+        let backends = vec![
+            create_backend("br-1", "sa", "BR", true),
+            create_backend("br-2", "sa", "BR", true),  // same country/region
+            create_backend("br-3", "sa", "BR", true),  // same country/region
+        ];
+
+        let client_geo = GeoInfo::new("BR".to_string(), RegionCode::SouthAmerica);
+
+        let result = LoadBalancer::pick_backend(
+            &backends,
+            &RegionCode::SouthAmerica,
+            Some(&client_geo),
+            |_| 0,
+        );
+
+        assert!(result.is_some());
+        // All have same score, first one wins
+        assert_eq!(result.unwrap().id, "br-1");
+    }
 }

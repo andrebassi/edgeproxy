@@ -35,6 +35,39 @@ O edgeProxy é configurado inteiramente através de variáveis de ambiente. Este
 |----------|--------|-----------|
 | `DEBUG` | *(não definido)* | Habilita logging debug quando definido |
 
+### Configurações TLS
+
+| Variável | Padrão | Descrição |
+|----------|--------|-----------|
+| `EDGEPROXY_TLS_ENABLED` | `false` | Habilita servidor TLS |
+| `EDGEPROXY_TLS_LISTEN_ADDR` | `0.0.0.0:8443` | Endereço de escuta TLS |
+| `EDGEPROXY_TLS_CERT` | *(nenhum)* | Caminho para certificado TLS (PEM) |
+| `EDGEPROXY_TLS_KEY` | *(nenhum)* | Caminho para chave privada TLS (PEM) |
+
+### Configurações do DNS Interno
+
+| Variável | Padrão | Descrição |
+|----------|--------|-----------|
+| `EDGEPROXY_DNS_ENABLED` | `false` | Habilita servidor DNS |
+| `EDGEPROXY_DNS_LISTEN_ADDR` | `0.0.0.0:5353` | Endereço de escuta DNS |
+| `EDGEPROXY_DNS_DOMAIN` | `internal` | Sufixo de domínio DNS |
+
+### Configurações da API de Auto-Discovery
+
+| Variável | Padrão | Descrição |
+|----------|--------|-----------|
+| `EDGEPROXY_API_ENABLED` | `false` | Habilita API de Auto-Discovery |
+| `EDGEPROXY_API_LISTEN_ADDR` | `0.0.0.0:8081` | Endereço de escuta da API |
+| `EDGEPROXY_HEARTBEAT_TTL_SECS` | `60` | TTL do heartbeat dos backends |
+
+### Configurações do Corrosion (SQLite Distribuído)
+
+| Variável | Padrão | Descrição |
+|----------|--------|-----------|
+| `EDGEPROXY_CORROSION_ENABLED` | `false` | Habilita backend Corrosion |
+| `EDGEPROXY_CORROSION_API_URL` | `http://localhost:8080` | URL da API HTTP do Corrosion |
+| `EDGEPROXY_CORROSION_POLL_SECS` | `5` | Intervalo de polling para sync de backends |
+
 ## Exemplos de Configuração
 
 ### Desenvolvimento
@@ -196,6 +229,152 @@ INFO edge_proxy::proxy: edgeProxy listening on 0.0.0.0:8080
 INFO edge_proxy::db: routing reload ok, version=1 backends=9
 DEBUG edge_proxy::proxy: proxying 10.10.0.100 -> sa-node-1 (10.10.1.1:8080)
 ```
+
+---
+
+## Servidor DNS Interno
+
+O servidor DNS fornece resolução de nomes geo-aware para domínios `.internal`.
+
+### Uso
+
+```bash
+# Habilitar servidor DNS
+export EDGEPROXY_DNS_ENABLED=true
+export EDGEPROXY_DNS_LISTEN_ADDR=0.0.0.0:5353
+export EDGEPROXY_DNS_DOMAIN=internal
+
+# Consultar melhor IP de backend (geo-aware)
+dig @localhost -p 5353 myapp.internal A
+
+# Resposta: Melhor IP de backend baseado na localização do cliente
+;; ANSWER SECTION:
+myapp.internal.    300    IN    A    10.50.1.5
+```
+
+### Schema DNS
+
+| Domínio | Resolve Para | Exemplo |
+|---------|--------------|---------|
+| `<app>.internal` | Melhor IP de backend | `myapp.internal` → `10.50.1.5` |
+| `<region>.backends.internal` | IP WG do backend | `nrt.backends.internal` → `10.50.4.1` |
+| `<region>.pops.internal` | IP WG do POP | `hkg.pops.internal` → `10.50.5.1` |
+
+### Benefícios
+
+- **Abstração**: Mude IPs sem atualizar configs
+- **Migração**: Mova backends sem downtime
+- **Geo-aware**: Retorna melhor backend baseado na localização do cliente
+
+---
+
+## API de Auto-Discovery
+
+A API permite que backends se registrem e desregistrem automaticamente.
+
+### Endpoints
+
+| Método | Endpoint | Descrição |
+|--------|----------|-----------|
+| GET | `/health` | Health check + versão + contagem de backends |
+| POST | `/api/v1/register` | Registrar novo backend |
+| POST | `/api/v1/heartbeat/:id` | Atualizar heartbeat do backend |
+| GET | `/api/v1/backends` | Listar todos os backends registrados |
+| GET | `/api/v1/backends/:id` | Obter detalhes de backend específico |
+| DELETE | `/api/v1/backends/:id` | Desregistrar um backend |
+
+### Exemplo de Registro
+
+```bash
+# Habilitar API
+export EDGEPROXY_API_ENABLED=true
+export EDGEPROXY_API_LISTEN_ADDR=0.0.0.0:8081
+export EDGEPROXY_HEARTBEAT_TTL_SECS=60
+
+# Registrar um backend
+curl -X POST http://localhost:8081/api/v1/register \
+  -H "Content-Type: application/json" \
+  -d '{
+    "id": "backend-eu-1",
+    "app": "myapp",
+    "region": "eu",
+    "ip": "10.50.1.1",
+    "port": 8080,
+    "weight": 2,
+    "soft_limit": 100,
+    "hard_limit": 150
+  }'
+
+# Enviar heartbeat (manter vivo)
+curl -X POST http://localhost:8081/api/v1/heartbeat/backend-eu-1
+
+# Listar todos os backends
+curl http://localhost:8081/api/v1/backends
+```
+
+### Benefícios
+
+- **Zero configuração**: Backends apenas iniciam e se registram
+- **Escalonamento automático**: Novas instâncias aparecem automaticamente
+- **Shutdown gracioso**: Desregistro limpo
+- **Health baseado em TTL**: Não saudável = expirado = desregistrado
+
+---
+
+## Control Plane Distribuído (Corrosion)
+
+Corrosion habilita replicação distribuída de SQLite em todos os POPs.
+
+### Arquitetura
+
+![Arquitetura Corrosion](/img/corrosion-architecture.svg)
+
+### Como Funciona
+
+Quando `EDGEPROXY_CORROSION_ENABLED=true`, edgeProxy **ignora** o `EDGEPROXY_DB_PATH` local e consulta a API HTTP do Corrosion para dados de backend. O Corrosion gerencia toda a replicação entre POPs automaticamente.
+
+![Fluxo de Dados Corrosion](/img/corrosion-data-flow.svg)
+
+### Configuração
+
+```bash
+# Habilitar backend Corrosion (substitui SQLite local)
+export EDGEPROXY_CORROSION_ENABLED=true
+export EDGEPROXY_CORROSION_API_URL=http://corrosion:8080
+export EDGEPROXY_CORROSION_POLL_SECS=5
+
+# Nota: EDGEPROXY_DB_PATH é IGNORADO quando Corrosion está habilitado
+./edgeproxy
+```
+
+### Configuração do Agente Corrosion
+
+O agente Corrosion roda como sidecar e gerencia seu próprio banco replicado:
+
+```toml
+# corrosion.toml (config do agente Corrosion, NÃO do edgeProxy)
+[db]
+path = "/var/lib/corrosion/state.db"  # Estado interno do Corrosion
+
+[cluster]
+name = "edgeproxy"
+bootstrap = ["10.50.0.1:4001", "10.50.5.1:4001"]
+
+[gossip]
+addr = "0.0.0.0:4001"
+
+[api]
+addr = "0.0.0.0:8080"  # edgeProxy conecta aqui
+```
+
+### Benefícios
+
+- **Sync em tempo real**: Mudanças propagam em ~100ms via protocolo gossip
+- **Sem intervenção manual**: Replicação automática entre todos os POPs
+- **Tolerância a partições**: Funciona durante splits de rede (baseado em CRDT)
+- **Fonte única de verdade**: Registre backend uma vez, disponível em todos os lugares
+
+---
 
 ## Próximos Passos
 

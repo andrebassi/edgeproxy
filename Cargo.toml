@@ -1,6 +1,6 @@
 [package]
 name = "edge-proxy"
-version = "0.1.0"
+version = "0.2.0"
 edition = "2021"
 
 [dependencies]
@@ -16,3 +16,28 @@ tracing-subscriber = "0.3"
 maxminddb = "0.23"
 reqwest = { version = "0.11", default-features = false, features = ["json", "rustls-tls"] }
 async-trait = "0.1"
+
+# TLS support
+tokio-rustls = "0.25"
+rustls = "0.22"
+rustls-pemfile = "2"
+rcgen = "0.12"  # Self-signed cert generation for testing
+
+# HTTP API for Auto-Discovery
+axum = "0.7"
+tower = "0.4"
+tower-http = { version = "0.5", features = ["cors", "trace"] }
+uuid = { version = "1", features = ["v4"] }
+
+# DNS server
+hickory-server = "0.24"
+hickory-proto = "0.24"
+
+[dev-dependencies]
+tokio-test = "0.4"
+tempfile = "3"
+tower = { version = "0.4", features = ["util"] }
+http-body-util = "0.1"
+hyper = "1.0"
+wiremock = "0.6"
+tracing-test = "0.2"

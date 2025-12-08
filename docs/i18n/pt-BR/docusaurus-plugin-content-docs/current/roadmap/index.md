@@ -4,27 +4,27 @@ sidebar_position: 0
 
 # Roadmap de Arquitetura Futura
 
-Este documento descreve a evolução planejada do edgeProxy rumo a uma plataforma de edge computing totalmente distribuída e auto-recuperável.
+Este documento descreve a evolução planejada do edgeProxy em direção a uma plataforma de edge computing totalmente distribuída e auto-recuperável.
 
-:::info Estado Atual
-edgeProxy v1 é um proxy TCP geo-aware funcional com overlay WireGuard. Este roadmap descreve o caminho para v2 e além.
+:::tip Versão Atual: 0.2.0
+O edgeProxy agora inclui **terminação TLS**, **API de Auto-Discovery**, **DNS Interno** e **integração com Corrosion**. Veja [Configuração](../configuration) para detalhes.
 :::
 
 ## Princípios de Design
 
-edgeProxy segue padrões comprovados de plataformas edge em produção:
+O edgeProxy segue padrões comprovados de plataformas edge em produção:
 
-- **WireGuard como Fundação**: Toda comunicação interna flui sobre a malha WireGuard. Ele fornece o **backhaul** entre POPs - a rede interna que transporta tráfego entre datacenters. Quando um usuário conecta ao servidor edge mais próximo mas seu backend roda em outra região, o proxy roteia transparentemente através de túneis WireGuard de baixa latência em vez de voltar pela internet pública.
+- **WireGuard como Fundação**: Toda comunicação interna flui sobre mesh WireGuard. Ele fornece o **backhaul** entre POPs - a rede interna que transporta tráfego entre datacenters. Quando um usuário conecta ao servidor edge mais próximo mas seu backend roda em uma região diferente, o proxy roteia transparentemente através de túneis WireGuard de baixa latência ao invés de voltar pela internet pública.
 
 ![WireGuard Backhaul](/img/roadmap/backhaul-diagram.svg)
 
-- **Rust + Tokio para Performance**: Componentes críticos construídos em Rust usando runtime assíncrono Tokio para latência previsível sem pausas de GC.
-- **6PN (Rede Privada IPv6)**: Conectividade interna usa endereçamento IPv6 privado, habilitando espaço de endereços ilimitado para backends e serviços.
-- **Rede Global Anycast**: Endereço IP único anunciado de múltiplas localizações, com BGP gerenciando roteamento ótimo.
+- **Rust + Tokio para Performance**: Componentes de caminho crítico construídos em Rust usando runtime async Tokio para latência previsível sem pausas de GC.
+- **6PN (Rede Privada IPv6)**: Conectividade interna usa endereçamento privado IPv6, habilitando espaço de endereços ilimitado para backends e serviços.
+- **Rede Global Anycast**: Único endereço IP anunciado de múltiplas localizações, com BGP tratando roteamento ótimo.
 
 ---
 
-## Comparação de Arquiteturas
+## Comparação de Arquitetura
 
 ### Arquitetura Atual vs Alvo
 
@@ -34,11 +34,25 @@ edgeProxy segue padrões comprovados de plataformas edge em produção:
 |------------|------------|-----------|
 | **Roteamento de Tráfego** | GeoDNS | Anycast BGP |
 | **Edge Proxy** | edgeProxy (Rust) | edgeProxy (Rust) |
-| **Plano de Controle** | routing.db (local) | Corrosion (replicado) |
+| **Control Plane** | routing.db (local) | Corrosion (replicado) |
 | **Rede Privada** | WireGuard IPv4 | WireGuard IPv6 (6PN) |
 | **Service Discovery** | Estático (manual) | Dinâmico (auto-registro) |
-| **DNS Interno** | Nenhum | Domínios .internal |
+| **DNS Interno** | Nenhum | domínios .internal |
 | **Health Checks** | Passivo | Ativo + Passivo |
+
+---
+
+## Funcionalidades Completadas (v0.2.0)
+
+As seguintes funcionalidades foram implementadas e estão documentadas em [Configuração](../configuration):
+
+| Funcionalidade | Descrição | Documentação |
+|----------------|-----------|--------------|
+| **Terminação TLS** | Suporte HTTPS com certificados auto-gerados ou customizados | [Configuração](../configuration#configurações-tls) |
+| **DNS Interno** | Resolução de domínios `.internal` geo-aware | [Configuração](../configuration#servidor-dns-interno) |
+| **API de Auto-Discovery** | Registro/desregistro dinâmico de backends | [Configuração](../configuration#api-de-auto-discovery) |
+| **Integração Corrosion** | Replicação SQLite distribuída entre POPs | [Configuração](../configuration#control-plane-distribuído-corrosion) |
+| **358 Testes Unitários** | Cobertura abrangente de testes (99.38%) | [Testes](../testing#testes-unitários) |
 
 ---
 
@@ -46,17 +60,15 @@ edgeProxy segue padrões comprovados de plataformas edge em produção:
 
 | Fase | Descrição | Status |
 |------|-----------|--------|
-| [Fase 1: DNS Interno](./phase-1-internal-dns) | Abstrair IPs de backend com nomes DNS | Planejado |
-| [Fase 2: Corrosion](./phase-2-corrosion) | Plano de controle distribuído com replicação SQLite | Planejado |
-| [Fase 3: Auto-Discovery](./phase-3-auto-discovery) | Registro automático de backends | Planejado |
-| [Fase 4: IPv6 (6PN)](./phase-4-ipv6) | Rede privada IPv6 | Planejado |
-| [Fase 5: Anycast BGP](./phase-5-anycast-bgp) | Roteamento de tráfego baseado em BGP | Planejado |
-| [Fase 6: Health Checks](./phase-6-health-checks) | Monitoramento ativo de saúde | Planejado |
+| [Fase 1: IPv6 (6PN)](./phase-1-ipv6) | Rede privada IPv6 | Planejado |
+| [Fase 2: Anycast BGP](./phase-2-anycast-bgp) | Roteamento de tráfego baseado em BGP | Planejado |
+| [Fase 3: Health Checks](./phase-3-health-checks) | Monitoramento ativo de saúde | Planejado |
 
 ---
 
 ## Documentação Relacionada
 
 - [Arquitetura](../architecture) - Arquitetura atual
+- [Configuração](../configuration) - Todas as variáveis de ambiente e funcionalidades
 - [WireGuard](../wireguard) - Detalhes do overlay de rede
 - [Benchmarks](../benchmark) - Medições de performance
