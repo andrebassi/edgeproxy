@@ -58,13 +58,20 @@ Todas as configurações do edgeProxy são feitas via variáveis de ambiente.
 | `EDGEPROXY_API_LISTEN_ADDR` | `0.0.0.0:8081` | Endereço da API |
 | `EDGEPROXY_HEARTBEAT_TTL_SECS` | `60` | TTL do heartbeat do backend |
 
-## Configurações Corrosion (SQLite Distribuído)
+## Configurações de Replicação Built-in
 
 | Variável | Padrão | Descrição |
 |----------|--------|-----------|
-| `EDGEPROXY_CORROSION_ENABLED` | `false` | Habilitar backend Corrosion |
-| `EDGEPROXY_CORROSION_API_URL` | `http://localhost:8080` | URL da API HTTP do Corrosion |
-| `EDGEPROXY_CORROSION_POLL_SECS` | `5` | Intervalo de polling para sync |
+| `EDGEPROXY_REPLICATION_ENABLED` | `false` | Habilitar replicação built-in |
+| `EDGEPROXY_REPLICATION_NODE_ID` | (hostname) | Identificador único do nó |
+| `EDGEPROXY_REPLICATION_GOSSIP_ADDR` | `0.0.0.0:4001` | Endereço UDP para protocolo gossip |
+| `EDGEPROXY_REPLICATION_TRANSPORT_ADDR` | `0.0.0.0:4002` | Endereço QUIC para sync de dados |
+| `EDGEPROXY_REPLICATION_BOOTSTRAP_PEERS` | (nenhum) | Lista de peers separados por vírgula |
+| `EDGEPROXY_REPLICATION_GOSSIP_INTERVAL_MS` | `1000` | Intervalo de ping gossip |
+| `EDGEPROXY_REPLICATION_SYNC_INTERVAL_MS` | `5000` | Intervalo de flush do sync |
+| `EDGEPROXY_REPLICATION_CLUSTER_NAME` | `edgeproxy` | Nome do cluster para isolamento |
+
+Veja [Replicação Built-in](./replication) para documentação detalhada.
 
 ## GeoIP
 

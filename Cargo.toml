@@ -17,11 +17,11 @@ maxminddb = "0.23"
 reqwest = { version = "0.11", default-features = false, features = ["json", "rustls-tls"] }
 async-trait = "0.1"
 
-# TLS support
-tokio-rustls = "0.25"
-rustls = "0.22"
+# TLS support (rustls 0.23 required by quinn 0.11)
+tokio-rustls = "0.26"
+rustls = { version = "0.23", default-features = false, features = ["std", "tls12", "ring"] }
 rustls-pemfile = "2"
-rcgen = "0.12"  # Self-signed cert generation for testing
+rcgen = "0.13"  # Self-signed cert generation for testing
 
 # HTTP API for Auto-Discovery
 axum = "0.7"
@@ -32,6 +32,16 @@ uuid = { version = "1", features = ["v4"] }
 # DNS server
 hickory-server = "0.24"
 hickory-proto = "0.24"
+
+# Built-in Replication (Corrosion-inspired)
+quinn = "0.11"                          # QUIC transport for peer communication
+foca = { version = "0.17", features = ["postcard-codec"] }  # SWIM gossip protocol
+postcard = { version = "1", features = ["alloc"] }  # Required by foca postcard-codec
+bincode = "1"                           # Binary encoding for compact messages
+crc32fast = "1"                         # Fast CRC32 for checksums
+parking_lot = "0.12"                    # Faster locks than std
+bytes = "1"                             # Byte buffer utilities
+rand = "0.8"                            # Random number generation for gossip
 
 [dev-dependencies]
 tokio-test = "0.4"

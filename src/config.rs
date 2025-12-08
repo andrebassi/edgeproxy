@@ -28,10 +28,14 @@ pub struct Config {
     pub dns_listen_addr: String,
     pub dns_domain: String,
 
-    // Corrosion settings (distributed SQLite)
-    pub corrosion_enabled: bool,
-    pub corrosion_api_url: String,
-    pub corrosion_poll_secs: u64,
+    // Built-in replication settings
+    pub replication_enabled: bool,
+    pub replication_node_id: Option<String>,
+    pub replication_gossip_addr: String,
+    pub replication_transport_addr: String,
+    pub replication_bootstrap_peers: Vec<String>,
+    pub replication_db_path: String,
+    pub replication_cluster_name: String,
 }
 
 impl Default for Config {
@@ -55,9 +59,13 @@ impl Default for Config {
             dns_enabled: false,
             dns_listen_addr: "0.0.0.0:5353".to_string(),
             dns_domain: "internal".to_string(),
-            corrosion_enabled: false,
-            corrosion_api_url: "http://localhost:8080".to_string(),
-            corrosion_poll_secs: 5,
+            replication_enabled: false,
+            replication_node_id: None,
+            replication_gossip_addr: "0.0.0.0:4001".to_string(),
+            replication_transport_addr: "0.0.0.0:4002".to_string(),
+            replication_bootstrap_peers: Vec::new(),
+            replication_db_path: "state.db".to_string(),
+            replication_cluster_name: "edgeproxy".to_string(),
         }
     }
 }
@@ -124,18 +132,28 @@ pub fn load_config() -> anyhow::Result<Config> {
     let dns_domain = std::env::var("EDGEPROXY_DNS_DOMAIN")
         .unwrap_or_else(|_| "internal".to_string());
 
-    // Corrosion settings
-    let corrosion_enabled = std::env::var("EDGEPROXY_CORROSION_ENABLED")
+    // Built-in replication settings
+    let replication_enabled = std::env::var("EDGEPROXY_REPLICATION_ENABLED")
         .map(|v| v == "1" || v.to_lowercase() == "true")
         .unwrap_or(false);
 
-    let corrosion_api_url = std::env::var("EDGEPROXY_CORROSION_API_URL")
-        .unwrap_or_else(|_| "http://localhost:8080".to_string());
+    let replication_node_id = std::env::var("EDGEPROXY_REPLICATION_NODE_ID").ok();
 
-    let corrosion_poll_secs = std::env::var("EDGEPROXY_CORROSION_POLL_SECS")
-        .unwrap_or_else(|_| "5".to_string())
-        .parse()
-        .unwrap_or(5);
+    let replication_gossip_addr = std::env::var("EDGEPROXY_REPLICATION_GOSSIP_ADDR")
+        .unwrap_or_else(|_| "0.0.0.0:4001".to_string());
+
+    let replication_transport_addr = std::env::var("EDGEPROXY_REPLICATION_TRANSPORT_ADDR")
+        .unwrap_or_else(|_| "0.0.0.0:4002".to_string());
+
+    let replication_bootstrap_peers = std::env::var("EDGEPROXY_REPLICATION_BOOTSTRAP_PEERS")
+        .map(|v| v.split(',').map(|s| s.trim().to_string()).collect())
+        .unwrap_or_default();
+
+    let replication_db_path = std::env::var("EDGEPROXY_REPLICATION_DB_PATH")
+        .unwrap_or_else(|_| "state.db".to_string());
+
+    let replication_cluster_name = std::env::var("EDGEPROXY_REPLICATION_CLUSTER_NAME")
+        .unwrap_or_else(|_| "edgeproxy".to_string());
 
     Ok(Config {
         listen_addr,
@@ -156,9 +174,13 @@ pub fn load_config() -> anyhow::Result<Config> {
         dns_enabled,
         dns_listen_addr,
         dns_domain,
-        corrosion_enabled,
-        corrosion_api_url,
-        corrosion_poll_secs,
+        replication_enabled,
+        replication_node_id,
+        replication_gossip_addr,
+        replication_transport_addr,
+        replication_bootstrap_peers,
+        replication_db_path,
+        replication_cluster_name,
     })
 }
 
@@ -175,14 +197,11 @@ mod tests {
         assert!(!cfg.tls_enabled);
         assert!(!cfg.api_enabled);
         assert!(!cfg.dns_enabled);
-        assert!(!cfg.corrosion_enabled);
-        assert_eq!(cfg.corrosion_api_url, "http://localhost:8080");
-        assert_eq!(cfg.corrosion_poll_secs, 5);
+        assert!(!cfg.replication_enabled);
     }
 
     #[test]
     fn test_load_config_defaults() {
-        // Clear env vars to ensure defaults
         std::env::remove_var("EDGEPROXY_LISTEN_ADDR");
         std::env::remove_var("EDGEPROXY_REGION");
 
@@ -214,11 +233,10 @@ mod tests {
     }
 
     #[test]
-    fn test_corrosion_config_disabled_by_default() {
-        std::env::remove_var("EDGEPROXY_CORROSION_ENABLED");
+    fn test_replication_config_disabled_by_default() {
+        std::env::remove_var("EDGEPROXY_REPLICATION_ENABLED");
         let cfg = load_config().unwrap();
-        assert!(!cfg.corrosion_enabled);
-        assert_eq!(cfg.corrosion_api_url, "http://localhost:8080");
+        assert!(!cfg.replication_enabled);
     }
 
     #[test]
@@ -270,17 +288,17 @@ mod tests {
     }
 
     #[test]
-    fn test_load_config_with_corrosion_enabled() {
-        std::env::set_var("EDGEPROXY_CORROSION_ENABLED", "true");
-        std::env::set_var("EDGEPROXY_CORROSION_API_URL", "http://10.0.0.1:9090");
-        std::env::set_var("EDGEPROXY_CORROSION_POLL_SECS", "10");
+    fn test_load_config_with_replication_enabled() {
+        std::env::set_var("EDGEPROXY_REPLICATION_ENABLED", "true");
+        std::env::set_var("EDGEPROXY_REPLICATION_NODE_ID", "pop-sa-1");
+        std::env::set_var("EDGEPROXY_REPLICATION_BOOTSTRAP_PEERS", "peer1:4001,peer2:4001");
         let cfg = load_config().unwrap();
-        assert!(cfg.corrosion_enabled);
-        assert_eq!(cfg.corrosion_api_url, "http://10.0.0.1:9090");
-        assert_eq!(cfg.corrosion_poll_secs, 10);
-        std::env::remove_var("EDGEPROXY_CORROSION_ENABLED");
-        std::env::remove_var("EDGEPROXY_CORROSION_API_URL");
-        std::env::remove_var("EDGEPROXY_CORROSION_POLL_SECS");
+        assert!(cfg.replication_enabled);
+        assert_eq!(cfg.replication_node_id, Some("pop-sa-1".to_string()));
+        assert_eq!(cfg.replication_bootstrap_peers.len(), 2);
+        std::env::remove_var("EDGEPROXY_REPLICATION_ENABLED");
+        std::env::remove_var("EDGEPROXY_REPLICATION_NODE_ID");
+        std::env::remove_var("EDGEPROXY_REPLICATION_BOOTSTRAP_PEERS");
     }
 
     #[test]

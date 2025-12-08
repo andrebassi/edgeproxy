@@ -413,7 +413,7 @@ cargo test -- --test-threads=1
 |--------|--------|-----------|-----------|
 | `adapters::outbound::dashmap_metrics_store` | 20 | 100.00% | Métricas de conexão, tracking RTT |
 | `adapters::outbound::dashmap_binding_repo` | 21 | 100.00% | Client affinity, TTL, GC |
-| `adapters::outbound::corrosion_backend_repo` | 28 | 99.85% | SQLite distribuído via Corrosion |
+| `adapters::outbound::replication_backend_repo` | 28 | 99.85% | Replicação SQLite distribuída |
 | `adapters::outbound::sqlite_backend_repo` | 20 | 99.26% | Storage SQLite de backends |
 | `adapters::outbound::prometheus_metrics_store` | 19 | 98.70% | Exportação métricas Prometheus |
 | `adapters::outbound::maxmind_geo_resolver` | 18 | 95.86% | Resolução GeoIP |
@@ -646,7 +646,7 @@ open target/llvm-cov/html/index.html
 
 | Arquivo | Linhas | Cobertas | Cobertura |
 |---------|--------|----------|-----------|
-| `adapters/outbound/corrosion_backend_repo.rs` | 677 | 676 | 99.85% |
+| `adapters/outbound/replication_backend_repo.rs` | 677 | 676 | 99.85% |
 | `adapters/outbound/sqlite_backend_repo.rs` | 404 | 401 | 99.26% |
 | `adapters/outbound/prometheus_metrics_store.rs` | 307 | 303 | 98.70% |
 | `adapters/outbound/maxmind_geo_resolver.rs` | 145 | 139 | 95.86% |

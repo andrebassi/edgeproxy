@@ -6,8 +6,8 @@ sidebar_position: 0
 
 This document outlines the planned evolution of edgeProxy towards a fully distributed, self-healing edge computing platform.
 
-:::tip Current Version: 0.2.0
-edgeProxy now includes **TLS termination**, **Auto-Discovery API**, **Internal DNS**, and **Corrosion integration**. See [Configuration](../configuration) for details.
+:::tip Current Version: 0.3.0
+edgeProxy now includes **TLS termination**, **Auto-Discovery API**, **Internal DNS**, and **built-in replication** (SWIM gossip + QUIC transport). See [Configuration](../configuration) for details.
 :::
 
 ## Design Principles
@@ -34,7 +34,7 @@ edgeProxy follows proven patterns from production edge platforms:
 |-----------|--------------|-------------|
 | **Traffic Routing** | GeoDNS | Anycast BGP |
 | **Edge Proxy** | edgeProxy (Rust) | edgeProxy (Rust) |
-| **Control Plane** | routing.db (local) | Corrosion (replicated) |
+| **Control Plane** | routing.db (local) | Built-in replication (replicated) |
 | **Private Network** | WireGuard IPv4 | WireGuard IPv6 (6PN) |
 | **Service Discovery** | Static (manual) | Dynamic (auto-register) |
 | **Internal DNS** | None | .internal domains |
@@ -48,11 +48,11 @@ The following features have been implemented and are documented in [Configuratio
 
 | Feature | Description | Documentation |
 |---------|-------------|---------------|
-| **TLS Termination** | HTTPS support with auto-generated or custom certificates | [Configuration](../configuration#tls-settings) |
-| **Internal DNS** | Geo-aware `.internal` domain resolution | [Configuration](../configuration#internal-dns-server) |
-| **Auto-Discovery API** | Dynamic backend registration/deregistration | [Configuration](../configuration#auto-discovery-api) |
-| **Corrosion Integration** | Distributed SQLite replication across POPs | [Configuration](../configuration#distributed-control-plane-corrosion) |
-| **358 Unit Tests** | Comprehensive test coverage (99.38%) | [Testing](../testing#unit-tests) |
+| **TLS Termination** | HTTPS support with auto-generated or custom certificates | [Environment Variables](../configuration/environment-variables#tls-settings) |
+| **Internal DNS** | Geo-aware `.internal` domain resolution | [DNS Server](../configuration/dns-server) |
+| **Auto-Discovery API** | Dynamic backend registration/deregistration | [Auto-Discovery API](../configuration/auto-discovery-api) |
+| **Built-in Replication** | Distributed SQLite replication across POPs (SWIM + QUIC) | [Built-in Replication](../configuration/replication) |
+| **490 Unit Tests** | Comprehensive test coverage | [Testing](../testing) |
 
 ---
 

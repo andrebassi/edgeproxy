@@ -8,7 +8,7 @@ This document describes how to manage backend nodes in edgeProxy using the Taskf
 
 ## Overview
 
-edgeProxy discovers backends dynamically from the `routing.db` SQLite database. The database is typically replicated across all POPs via Corrosion (or similar distributed state system). You can manage nodes using the provided Taskfile commands.
+edgeProxy discovers backends dynamically from the `routing.db` SQLite database. The database is replicated across all POPs via the built-in replication system (SWIM gossip + QUIC transport). You can manage nodes using the provided Taskfile commands.
 
 ## Node Schema
 

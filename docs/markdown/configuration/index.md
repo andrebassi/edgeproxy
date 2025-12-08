@@ -14,7 +14,7 @@ edgeProxy is configured entirely through environment variables. This section cov
 | [Database Schema](./database-schema) | Backend routing table structure |
 | [Internal DNS](./dns-server) | Geo-aware `.internal` domain resolution |
 | [Auto-Discovery API](./auto-discovery-api) | Dynamic backend registration |
-| [Distributed Control Plane](./corrosion) | Corrosion distributed SQLite |
+| [Built-in Replication](./replication) | Distributed SQLite sync (SWIM + QUIC) |
 | [Infrastructure Components](./infrastructure) | Rate limiting, circuit breaker, metrics |
 
 ## Quick Start

@@ -19,7 +19,7 @@ O edgeProxy é projetado como um proxy L4 (TCP) stateless que pode ser implantad
 
 ## Deploy Multi-Região
 
-O edgeProxy é projetado para deploys multi-região com rede mesh WireGuard e replicação SQLite distribuída via Corrosion:
+O edgeProxy é projetado para deploys multi-região com rede mesh WireGuard e replicação SQLite distribuída built-in (SWIM gossip + QUIC transport):
 
 ![Arquitetura Multi-Região](/img/multi-region.svg)
 
@@ -336,7 +336,7 @@ O fluxo de requisição mostra o ciclo de vida completo de uma conexão TCP atra
 ### Por que SQLite?
 
 - **Simplicidade**: Arquivo único, sem servidor necessário
-- **Replicação**: Funciona com Corrosion para sync distribuído
+- **Replicação**: Sync distribuído built-in via SWIM gossip + QUIC
 - **Transações**: Garantias ACID para atualizações de roteamento
 
 ### Por que WireGuard?
