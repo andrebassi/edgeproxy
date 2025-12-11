@@ -2,12 +2,11 @@
 
 **Distributed TCP Proxy for Geo-Aware Load Balancing**
 
-[![Website](https://img.shields.io/badge/website-edgeproxy.io-orange)](https://edgeproxy.io)
-[![Documentation](https://img.shields.io/badge/docs-docs.edgeproxy.io-blue)](https://docs.edgeproxy.io)
-[![Release](https://img.shields.io/github/v/release/andrebassi/edgeproxy)](https://github.com/andrebassi/edgeproxy/releases)
+[![Release](https://img.shields.io/github/v/release/bassiandre/edgeproxy?color=green)](https://github.com/bassiandre/edgeproxy/releases)
 [![License](https://img.shields.io/badge/license-MIT-blue)](LICENSE)
+[![Documentation](https://img.shields.io/badge/docs-edgeproxy--docs.runner.codes-blue)](https://edgeproxy-docs.runner.codes)
 
-**Website:** https://edgeproxy.io | **Documentation:** https://docs.edgeproxy.io
+**Documentation:** https://edgeproxy-docs.runner.codes
 
 ## What is edgeProxy?
 
@@ -145,7 +144,7 @@ fly scale count 3 --region gru,iad,fra
 fly status
 ```
 
-See [Fly.io Deployment Guide](https://docs.edgeproxy.io/deployment/flyio) for details.
+See [Fly.io Deployment Guide](https://edgeproxy-docs.runner.codes/docs/deployment/flyio) for details.
 
 ### AWS EC2
 
@@ -172,7 +171,7 @@ sudo systemctl start edgeproxy
 - `c6i.large` for production
 - Deploy in: `us-east-1`, `eu-west-1`, `sa-east-1`
 
-See [AWS Deployment Guide](https://docs.edgeproxy.io/deployment/aws) for details.
+See [AWS Deployment Guide](https://edgeproxy-docs.runner.codes/docs/deployment/aws) for details.
 
 ### Google Cloud Platform (GCP)
 
@@ -202,7 +201,7 @@ gcloud compute scp target/x86_64-unknown-linux-gnu/release/edge-proxy edgeproxy-
 - `n2-standard-2` for production
 - Deploy in: `us-central1`, `europe-west1`, `asia-east2`
 
-See [GCP Deployment Guide](https://docs.edgeproxy.io/deployment/gcp) for details.
+See [GCP Deployment Guide](https://edgeproxy-docs.runner.codes/docs/deployment/gcp) for details.
 
 ## WireGuard Configuration
 
@@ -288,7 +287,7 @@ ping 10.50.0.2  # Ping another POP
 | **Full Mesh** | Multi-region with direct connectivity | Medium |
 | **Hierarchical** | Large scale with regional hubs | High |
 
-See [WireGuard Configuration Guide](https://docs.edgeproxy.io/internals/wireguard) for complete setup instructions.
+See [WireGuard Configuration Guide](https://edgeproxy-docs.runner.codes/docs/internals/wireguard) for complete setup instructions.
 
 ## Routing Database
 
@@ -590,7 +589,7 @@ edgeProxy is evolving towards a fully distributed, self-healing edge platform:
 | Phase 5 | Anycast BGP | Planned |
 | Phase 6 | Active Health Checks | Planned |
 
-See the full [Roadmap](https://docs.edgeproxy.io/roadmap) for details.
+See the full [Roadmap](https://edgeproxy-docs.runner.codes/docs/roadmap) for details.
 
 ## Development
 
@@ -703,7 +702,7 @@ VALUES
 | `soft_limit` | Comfortable connection count |
 | `hard_limit` | Maximum connections (excluded when reached) |
 
-See [Testing Documentation](https://docs.edgeproxy.io/testing) for complete guide.
+See [Testing Documentation](https://edgeproxy-docs.runner.codes/docs/testing) for complete guide.
 
 ### Docker Development
 
@@ -723,16 +722,16 @@ task docker-down
 
 ## Documentation
 
-Full documentation is available at [docs.edgeproxy.io](https://docs.edgeproxy.io)
+Full documentation is available at [edgeproxy-docs.runner.codes](https://edgeproxy-docs.runner.codes)
 
-- [Getting Started](https://docs.edgeproxy.io/getting-started)
-- [Architecture](https://docs.edgeproxy.io/architecture)
-- [Configuration](https://docs.edgeproxy.io/configuration)
-- [Testing](https://docs.edgeproxy.io/testing)
-- [Deployment](https://docs.edgeproxy.io/deployment/docker)
-- [WireGuard Setup](https://docs.edgeproxy.io/internals/wireguard)
-- [Internals](https://docs.edgeproxy.io/internals/load-balancer)
-- [Roadmap](https://docs.edgeproxy.io/roadmap)
+- [Getting Started](https://edgeproxy-docs.runner.codes/docs/getting-started)
+- [Architecture](https://edgeproxy-docs.runner.codes/docs/architecture)
+- [Configuration](https://edgeproxy-docs.runner.codes/docs/configuration)
+- [Testing](https://edgeproxy-docs.runner.codes/docs/testing)
+- [Deployment](https://edgeproxy-docs.runner.codes/docs/deployment/docker)
+- [WireGuard Setup](https://edgeproxy-docs.runner.codes/docs/internals/wireguard)
+- [Internals](https://edgeproxy-docs.runner.codes/docs/internals/load-balancer)
+- [Roadmap](https://edgeproxy-docs.runner.codes/docs/roadmap)
 
 ## Related Technologies
 

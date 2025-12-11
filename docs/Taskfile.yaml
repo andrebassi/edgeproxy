@@ -37,3 +37,44 @@ tasks:
     cmds:
       - task: clean
       - task: serve
+
+  # ==========================================
+  # Cloudflare Pages Deployment
+  # ==========================================
+
+  cf:deploy:
+    desc: Build and deploy to Cloudflare Pages
+    deps: [build]
+    cmds:
+      - npx wrangler pages deploy build --project-name=edgeproxy --commit-dirty=true
+    env:
+      CLOUDFLARE_ACCOUNT_ID: e11c18594fd320087af6f18de03012b7
+
+  cf:deploy:prod:
+    desc: Deploy to Cloudflare Pages (production branch)
+    deps: [build]
+    cmds:
+      - npx wrangler pages deploy build --project-name=edgeproxy --branch=main --commit-dirty=true
+    env:
+      CLOUDFLARE_ACCOUNT_ID: e11c18594fd320087af6f18de03012b7
+
+  cf:list:
+    desc: List Cloudflare Pages deployments
+    cmds:
+      - npx wrangler pages deployment list --project-name=edgeproxy
+    env:
+      CLOUDFLARE_ACCOUNT_ID: e11c18594fd320087af6f18de03012b7
+
+  cf:tail:
+    desc: Tail Cloudflare Pages logs
+    cmds:
+      - npx wrangler pages deployment tail --project-name=edgeproxy
+    env:
+      CLOUDFLARE_ACCOUNT_ID: e11c18594fd320087af6f18de03012b7
+
+  cf:delete:
+    desc: Delete a specific deployment (requires DEPLOYMENT_ID)
+    cmds:
+      - npx wrangler pages deployment delete --project-name=edgeproxy {{.DEPLOYMENT_ID}}
+    env:
+      CLOUDFLARE_ACCOUNT_ID: e11c18594fd320087af6f18de03012b7
