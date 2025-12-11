@@ -2,7 +2,7 @@
 
 **Distributed TCP Proxy for Geo-Aware Load Balancing**
 
-[![Release](https://img.shields.io/github/v/release/bassiandre/edgeproxy?color=green)](https://github.com/bassiandre/edgeproxy/releases)
+[![Release](https://img.shields.io/github/v/release/andrebassi/edgeproxy?color=green)](https://github.com/andrebassi/edgeproxy/releases)
 [![License](https://img.shields.io/badge/license-MIT-blue)](LICENSE)
 [![Documentation](https://img.shields.io/badge/docs-edgeproxy--docs.runner.codes-blue)](https://edgeproxy-docs.runner.codes)
 
