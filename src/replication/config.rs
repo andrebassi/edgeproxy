@@ -5,6 +5,40 @@
 use std::net::SocketAddr;
 use std::time::Duration;
 
+/// Mode of operation for a replication node.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub enum ReplicaMode {
+    /// Full read-write node, participates in broadcasts
+    #[default]
+    Primary,
+    /// Read-only node, receives changes but doesn't broadcast
+    ReadReplica,
+}
+
+impl ReplicaMode {
+    /// Check if this node can write (record local changes).
+    pub fn can_write(&self) -> bool {
+        matches!(self, ReplicaMode::Primary)
+    }
+
+    /// Check if this node should broadcast changes.
+    pub fn should_broadcast(&self) -> bool {
+        matches!(self, ReplicaMode::Primary)
+    }
+}
+
+impl std::str::FromStr for ReplicaMode {
+    type Err = String;
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        match s.to_lowercase().as_str() {
+            "primary" | "master" | "rw" => Ok(ReplicaMode::Primary),
+            "replica" | "read-replica" | "readonly" | "ro" => Ok(ReplicaMode::ReadReplica),
+            _ => Err(format!("unknown replica mode: '{}'. Use 'primary' or 'replica'", s)),
+        }
+    }
+}
+
 /// Configuration for the replication agent.
 #[derive(Debug, Clone)]
 pub struct ReplicationConfig {
@@ -40,6 +74,15 @@ pub struct ReplicationConfig {
 
     /// Enable TLS for transport (default: true)
     pub tls_enabled: bool,
+
+    /// Replica mode (default: Primary)
+    pub replica_mode: ReplicaMode,
+
+    /// Enable mDNS auto-discovery (default: true)
+    pub mdns_enabled: bool,
+
+    /// mDNS service type (default: "_edgeproxy._udp.local.")
+    pub mdns_service_type: String,
 }
 
 impl Default for ReplicationConfig {
@@ -56,6 +99,9 @@ impl Default for ReplicationConfig {
             max_pending_changes: 1000,
             broadcast_rate_limit: 10 * 1024 * 1024, // 10 MB/s
             tls_enabled: true,
+            replica_mode: ReplicaMode::Primary,
+            mdns_enabled: true,
+            mdns_service_type: "_edgeproxy._udp.local.".to_string(),
         }
     }
 }
@@ -97,6 +143,39 @@ impl ReplicationConfig {
     pub fn cluster_name(mut self, name: impl Into<String>) -> Self {
         self.cluster_name = name.into();
         self
+    }
+
+    /// Set the replica mode.
+    pub fn replica_mode(mut self, mode: ReplicaMode) -> Self {
+        self.replica_mode = mode;
+        self
+    }
+
+    /// Enable or disable mDNS discovery.
+    pub fn mdns_enabled(mut self, enabled: bool) -> Self {
+        self.mdns_enabled = enabled;
+        self
+    }
+
+    /// Set the mDNS service type.
+    pub fn mdns_service_type(mut self, service_type: impl Into<String>) -> Self {
+        self.mdns_service_type = service_type.into();
+        self
+    }
+
+    /// Check if mDNS discovery is enabled.
+    pub fn is_mdns_enabled(&self) -> bool {
+        self.mdns_enabled
+    }
+
+    /// Check if this node is a read replica.
+    pub fn is_read_replica(&self) -> bool {
+        self.replica_mode == ReplicaMode::ReadReplica
+    }
+
+    /// Check if this node is a primary.
+    pub fn is_primary(&self) -> bool {
+        self.replica_mode == ReplicaMode::Primary
     }
 
     /// Validate the configuration.
@@ -164,5 +243,112 @@ mod tests {
     fn test_validate_ok() {
         let config = ReplicationConfig::new("node-1");
         assert!(config.validate().is_ok());
+    }
+
+    // ==================== ReplicaMode Tests ====================
+
+    #[test]
+    fn test_replica_mode_default() {
+        let mode = ReplicaMode::default();
+        assert_eq!(mode, ReplicaMode::Primary);
+    }
+
+    #[test]
+    fn test_replica_mode_can_write() {
+        assert!(ReplicaMode::Primary.can_write());
+        assert!(!ReplicaMode::ReadReplica.can_write());
+    }
+
+    #[test]
+    fn test_replica_mode_should_broadcast() {
+        assert!(ReplicaMode::Primary.should_broadcast());
+        assert!(!ReplicaMode::ReadReplica.should_broadcast());
+    }
+
+    #[test]
+    fn test_replica_mode_from_str_primary() {
+        assert_eq!("primary".parse::<ReplicaMode>().unwrap(), ReplicaMode::Primary);
+        assert_eq!("master".parse::<ReplicaMode>().unwrap(), ReplicaMode::Primary);
+        assert_eq!("rw".parse::<ReplicaMode>().unwrap(), ReplicaMode::Primary);
+        assert_eq!("PRIMARY".parse::<ReplicaMode>().unwrap(), ReplicaMode::Primary);
+    }
+
+    #[test]
+    fn test_replica_mode_from_str_replica() {
+        assert_eq!("replica".parse::<ReplicaMode>().unwrap(), ReplicaMode::ReadReplica);
+        assert_eq!("read-replica".parse::<ReplicaMode>().unwrap(), ReplicaMode::ReadReplica);
+        assert_eq!("readonly".parse::<ReplicaMode>().unwrap(), ReplicaMode::ReadReplica);
+        assert_eq!("ro".parse::<ReplicaMode>().unwrap(), ReplicaMode::ReadReplica);
+        assert_eq!("REPLICA".parse::<ReplicaMode>().unwrap(), ReplicaMode::ReadReplica);
+    }
+
+    #[test]
+    fn test_replica_mode_from_str_invalid() {
+        let result = "invalid".parse::<ReplicaMode>();
+        assert!(result.is_err());
+        assert!(result.unwrap_err().contains("unknown replica mode"));
+    }
+
+    #[test]
+    fn test_config_with_replica_mode() {
+        let config = ReplicationConfig::new("node-1")
+            .replica_mode(ReplicaMode::ReadReplica);
+
+        assert!(config.is_read_replica());
+        assert!(!config.is_primary());
+        assert!(!config.replica_mode.can_write());
+    }
+
+    #[test]
+    fn test_config_default_is_primary() {
+        let config = ReplicationConfig::new("node-1");
+        assert!(config.is_primary());
+        assert!(!config.is_read_replica());
+    }
+
+    // ==================== mDNS Config Tests ====================
+
+    #[test]
+    fn test_mdns_default_enabled() {
+        let config = ReplicationConfig::default();
+        assert!(config.mdns_enabled);
+        assert!(config.is_mdns_enabled());
+    }
+
+    #[test]
+    fn test_mdns_default_service_type() {
+        let config = ReplicationConfig::default();
+        assert_eq!(config.mdns_service_type, "_edgeproxy._udp.local.");
+    }
+
+    #[test]
+    fn test_mdns_enabled_builder() {
+        let config = ReplicationConfig::new("node-1")
+            .mdns_enabled(false);
+
+        assert!(!config.mdns_enabled);
+        assert!(!config.is_mdns_enabled());
+    }
+
+    #[test]
+    fn test_mdns_service_type_builder() {
+        let config = ReplicationConfig::new("node-1")
+            .mdns_service_type("_custom._tcp.local.");
+
+        assert_eq!(config.mdns_service_type, "_custom._tcp.local.");
+    }
+
+    #[test]
+    fn test_mdns_combined_with_other_options() {
+        let config = ReplicationConfig::new("node-1")
+            .cluster_name("test-cluster")
+            .mdns_enabled(true)
+            .mdns_service_type("_myapp._udp.local.")
+            .replica_mode(ReplicaMode::ReadReplica);
+
+        assert!(config.is_mdns_enabled());
+        assert_eq!(config.mdns_service_type, "_myapp._udp.local.");
+        assert!(config.is_read_replica());
+        assert_eq!(config.cluster_name, "test-cluster");
     }
 }

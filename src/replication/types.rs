@@ -131,6 +131,165 @@ pub enum ChangeKind {
     Delete,
 }
 
+/// Field operation for delta sync.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub enum FieldOp {
+    /// Set field to a value
+    Set(serde_json::Value),
+    /// Remove field (set to NULL)
+    Unset,
+}
+
+impl FieldOp {
+    /// Create a Set operation from a JSON value.
+    pub fn set(value: impl Into<serde_json::Value>) -> Self {
+        FieldOp::Set(value.into())
+    }
+
+    /// Check if this is an Unset operation.
+    pub fn is_unset(&self) -> bool {
+        matches!(self, FieldOp::Unset)
+    }
+}
+
+/// Delta data containing only changed fields.
+///
+/// Used for bandwidth-efficient updates where only modified fields
+/// are transmitted instead of the entire row.
+#[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize)]
+pub struct DeltaData {
+    /// Map of field name to operation
+    pub fields: std::collections::HashMap<String, FieldOp>,
+}
+
+impl DeltaData {
+    /// Create empty delta data.
+    pub fn new() -> Self {
+        Self {
+            fields: std::collections::HashMap::new(),
+        }
+    }
+
+    /// Add a field change.
+    pub fn set_field(&mut self, name: impl Into<String>, value: serde_json::Value) {
+        self.fields.insert(name.into(), FieldOp::Set(value));
+    }
+
+    /// Mark a field as removed.
+    pub fn unset_field(&mut self, name: impl Into<String>) {
+        self.fields.insert(name.into(), FieldOp::Unset);
+    }
+
+    /// Check if this delta is empty.
+    pub fn is_empty(&self) -> bool {
+        self.fields.is_empty()
+    }
+
+    /// Get the number of changed fields.
+    pub fn len(&self) -> usize {
+        self.fields.len()
+    }
+
+    /// Apply delta to a JSON object, returning the merged result.
+    pub fn apply_to(&self, base: &serde_json::Value) -> serde_json::Value {
+        let mut result = base.clone();
+
+        if let serde_json::Value::Object(ref mut map) = result {
+            for (field, op) in &self.fields {
+                match op {
+                    FieldOp::Set(value) => {
+                        map.insert(field.clone(), value.clone());
+                    }
+                    FieldOp::Unset => {
+                        map.remove(field);
+                    }
+                }
+            }
+        }
+
+        result
+    }
+
+    /// Convert to JSON string for storage.
+    pub fn to_json(&self) -> String {
+        serde_json::to_string(self).unwrap_or_default()
+    }
+
+    /// Parse from JSON string.
+    pub fn from_json(s: &str) -> Option<Self> {
+        serde_json::from_str(s).ok()
+    }
+
+    /// Create from comparing old and new JSON values.
+    pub fn diff(old: &serde_json::Value, new: &serde_json::Value) -> Self {
+        let mut delta = DeltaData::new();
+
+        if let (serde_json::Value::Object(old_map), serde_json::Value::Object(new_map)) = (old, new) {
+            // Check for added or changed fields
+            for (key, new_val) in new_map {
+                match old_map.get(key) {
+                    Some(old_val) if old_val != new_val => {
+                        delta.fields.insert(key.clone(), FieldOp::Set(new_val.clone()));
+                    }
+                    None => {
+                        delta.fields.insert(key.clone(), FieldOp::Set(new_val.clone()));
+                    }
+                    _ => {} // No change
+                }
+            }
+
+            // Check for removed fields
+            for key in old_map.keys() {
+                if !new_map.contains_key(key) {
+                    delta.fields.insert(key.clone(), FieldOp::Unset);
+                }
+            }
+        }
+
+        delta
+    }
+}
+
+/// Data mode for a change.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub enum ChangeData {
+    /// Full row data (backward compatible)
+    Full(String),
+    /// Delta data (only changed fields)
+    Delta(DeltaData),
+}
+
+impl ChangeData {
+    /// Create full data mode.
+    pub fn full(data: impl Into<String>) -> Self {
+        ChangeData::Full(data.into())
+    }
+
+    /// Create delta data mode.
+    pub fn delta(delta: DeltaData) -> Self {
+        ChangeData::Delta(delta)
+    }
+
+    /// Check if this is delta mode.
+    pub fn is_delta(&self) -> bool {
+        matches!(self, ChangeData::Delta(_))
+    }
+
+    /// Get as full JSON string (converts delta to JSON if needed).
+    pub fn as_json(&self) -> String {
+        match self {
+            ChangeData::Full(s) => s.clone(),
+            ChangeData::Delta(d) => d.to_json(),
+        }
+    }
+}
+
+impl Default for ChangeData {
+    fn default() -> Self {
+        ChangeData::Full(String::new())
+    }
+}
+
 /// A single change to be replicated.
 ///
 /// Uses Last-Write-Wins (LWW) semantics based on HLC timestamp.
@@ -599,5 +758,304 @@ mod tests {
 
         assert_eq!(result.wall_time, far_future);
         assert_eq!(result.counter, 8); // self.counter + 1
+    }
+
+    // ==================== Delta Sync Tests ====================
+
+    #[test]
+    fn test_field_op_set() {
+        let op = FieldOp::set("hello");
+        assert!(!op.is_unset());
+        match op {
+            FieldOp::Set(v) => assert_eq!(v, "hello"),
+            _ => panic!("expected Set"),
+        }
+    }
+
+    #[test]
+    fn test_field_op_set_number() {
+        let op = FieldOp::set(42);
+        assert!(!op.is_unset());
+        match op {
+            FieldOp::Set(v) => assert_eq!(v, 42),
+            _ => panic!("expected Set"),
+        }
+    }
+
+    #[test]
+    fn test_field_op_unset() {
+        let op = FieldOp::Unset;
+        assert!(op.is_unset());
+    }
+
+    #[test]
+    fn test_field_op_eq() {
+        let op1 = FieldOp::set("test");
+        let op2 = FieldOp::set("test");
+        let op3 = FieldOp::set("other");
+        let op4 = FieldOp::Unset;
+
+        assert_eq!(op1, op2);
+        assert_ne!(op1, op3);
+        assert_ne!(op1, op4);
+    }
+
+    #[test]
+    fn test_delta_data_new() {
+        let delta = DeltaData::new();
+        assert!(delta.is_empty());
+        assert_eq!(delta.len(), 0);
+    }
+
+    #[test]
+    fn test_delta_data_set_field() {
+        let mut delta = DeltaData::new();
+        delta.set_field("name", serde_json::json!("Alice"));
+        delta.set_field("age", serde_json::json!(30));
+
+        assert!(!delta.is_empty());
+        assert_eq!(delta.len(), 2);
+        assert!(delta.fields.contains_key("name"));
+        assert!(delta.fields.contains_key("age"));
+    }
+
+    #[test]
+    fn test_delta_data_unset_field() {
+        let mut delta = DeltaData::new();
+        delta.unset_field("deleted_field");
+
+        assert_eq!(delta.len(), 1);
+        assert!(matches!(delta.fields.get("deleted_field"), Some(FieldOp::Unset)));
+    }
+
+    #[test]
+    fn test_delta_data_apply_to_set() {
+        let base = serde_json::json!({"name": "Bob", "age": 25});
+        let mut delta = DeltaData::new();
+        delta.set_field("age", serde_json::json!(26));
+        delta.set_field("city", serde_json::json!("NYC"));
+
+        let result = delta.apply_to(&base);
+
+        assert_eq!(result["name"], "Bob");
+        assert_eq!(result["age"], 26);
+        assert_eq!(result["city"], "NYC");
+    }
+
+    #[test]
+    fn test_delta_data_apply_to_unset() {
+        let base = serde_json::json!({"name": "Bob", "age": 25, "temp": "remove"});
+        let mut delta = DeltaData::new();
+        delta.unset_field("temp");
+
+        let result = delta.apply_to(&base);
+
+        assert_eq!(result["name"], "Bob");
+        assert_eq!(result["age"], 25);
+        assert!(result.get("temp").is_none());
+    }
+
+    #[test]
+    fn test_delta_data_apply_to_non_object() {
+        let base = serde_json::json!([1, 2, 3]);
+        let mut delta = DeltaData::new();
+        delta.set_field("field", serde_json::json!("value"));
+
+        // Applying to non-object should return base unchanged
+        let result = delta.apply_to(&base);
+        assert_eq!(result, base);
+    }
+
+    #[test]
+    fn test_delta_data_to_json() {
+        let mut delta = DeltaData::new();
+        delta.set_field("name", serde_json::json!("Test"));
+
+        let json = delta.to_json();
+        assert!(json.contains("name"));
+        assert!(json.contains("Test"));
+    }
+
+    #[test]
+    fn test_delta_data_from_json() {
+        let mut original = DeltaData::new();
+        original.set_field("field", serde_json::json!(123));
+
+        let json = original.to_json();
+        let parsed = DeltaData::from_json(&json).expect("should parse");
+
+        assert_eq!(parsed.len(), 1);
+        assert!(matches!(
+            parsed.fields.get("field"),
+            Some(FieldOp::Set(v)) if *v == serde_json::json!(123)
+        ));
+    }
+
+    #[test]
+    fn test_delta_data_from_json_invalid() {
+        let result = DeltaData::from_json("not valid json {{{");
+        assert!(result.is_none());
+    }
+
+    #[test]
+    fn test_delta_data_diff_added_field() {
+        let old = serde_json::json!({"a": 1});
+        let new = serde_json::json!({"a": 1, "b": 2});
+
+        let delta = DeltaData::diff(&old, &new);
+
+        assert_eq!(delta.len(), 1);
+        assert!(matches!(delta.fields.get("b"), Some(FieldOp::Set(v)) if *v == 2));
+    }
+
+    #[test]
+    fn test_delta_data_diff_changed_field() {
+        let old = serde_json::json!({"a": 1, "b": 2});
+        let new = serde_json::json!({"a": 1, "b": 999});
+
+        let delta = DeltaData::diff(&old, &new);
+
+        assert_eq!(delta.len(), 1);
+        assert!(matches!(delta.fields.get("b"), Some(FieldOp::Set(v)) if *v == 999));
+    }
+
+    #[test]
+    fn test_delta_data_diff_removed_field() {
+        let old = serde_json::json!({"a": 1, "b": 2});
+        let new = serde_json::json!({"a": 1});
+
+        let delta = DeltaData::diff(&old, &new);
+
+        assert_eq!(delta.len(), 1);
+        assert!(matches!(delta.fields.get("b"), Some(FieldOp::Unset)));
+    }
+
+    #[test]
+    fn test_delta_data_diff_no_change() {
+        let old = serde_json::json!({"a": 1, "b": 2});
+        let new = serde_json::json!({"a": 1, "b": 2});
+
+        let delta = DeltaData::diff(&old, &new);
+
+        assert!(delta.is_empty());
+    }
+
+    #[test]
+    fn test_delta_data_diff_complex() {
+        let old = serde_json::json!({"a": 1, "b": 2, "c": 3});
+        let new = serde_json::json!({"a": 1, "b": 999, "d": 4});
+
+        let delta = DeltaData::diff(&old, &new);
+
+        // b changed, c removed, d added
+        assert_eq!(delta.len(), 3);
+        assert!(matches!(delta.fields.get("b"), Some(FieldOp::Set(v)) if *v == 999));
+        assert!(matches!(delta.fields.get("c"), Some(FieldOp::Unset)));
+        assert!(matches!(delta.fields.get("d"), Some(FieldOp::Set(v)) if *v == 4));
+    }
+
+    #[test]
+    fn test_delta_data_diff_non_objects() {
+        // Diffing non-objects should return empty delta
+        let old = serde_json::json!([1, 2]);
+        let new = serde_json::json!([3, 4]);
+
+        let delta = DeltaData::diff(&old, &new);
+        assert!(delta.is_empty());
+    }
+
+    #[test]
+    fn test_change_data_full() {
+        let cd = ChangeData::full("{\"id\": 1}");
+        assert!(!cd.is_delta());
+        assert_eq!(cd.as_json(), "{\"id\": 1}");
+    }
+
+    #[test]
+    fn test_change_data_delta() {
+        let mut delta = DeltaData::new();
+        delta.set_field("x", serde_json::json!(42));
+
+        let cd = ChangeData::delta(delta);
+        assert!(cd.is_delta());
+        assert!(cd.as_json().contains("42"));
+    }
+
+    #[test]
+    fn test_change_data_default() {
+        let cd = ChangeData::default();
+        assert!(!cd.is_delta());
+        assert_eq!(cd.as_json(), "");
+    }
+
+    #[test]
+    fn test_change_data_eq() {
+        let cd1 = ChangeData::full("test");
+        let cd2 = ChangeData::full("test");
+        let cd3 = ChangeData::full("other");
+
+        assert_eq!(cd1, cd2);
+        assert_ne!(cd1, cd3);
+    }
+
+    #[test]
+    fn test_delta_roundtrip() {
+        // Create original object
+        let original = serde_json::json!({"name": "Alice", "age": 30, "city": "NYC"});
+
+        // Make changes: update age, remove city, add country
+        let updated = serde_json::json!({"name": "Alice", "age": 31, "country": "US"});
+
+        // Compute delta
+        let delta = DeltaData::diff(&original, &updated);
+
+        // Apply delta to original
+        let result = delta.apply_to(&original);
+
+        // Result should match updated
+        assert_eq!(result, updated);
+    }
+
+    #[test]
+    fn test_delta_serialization_roundtrip() {
+        let mut delta = DeltaData::new();
+        delta.set_field("str_field", serde_json::json!("hello"));
+        delta.set_field("num_field", serde_json::json!(42));
+        delta.set_field("bool_field", serde_json::json!(true));
+        delta.unset_field("removed");
+
+        // Serialize via JSON (bincode doesn't support serde_json::Value)
+        let json = serde_json::to_string(&delta).unwrap();
+        let decoded: DeltaData = serde_json::from_str(&json).unwrap();
+
+        assert_eq!(decoded.len(), 4);
+        assert!(matches!(decoded.fields.get("str_field"), Some(FieldOp::Set(_))));
+        assert!(matches!(decoded.fields.get("removed"), Some(FieldOp::Unset)));
+    }
+
+    #[test]
+    fn test_change_data_serialization() {
+        let cd = ChangeData::full("{\"key\": \"value\"}");
+
+        let bytes = bincode::serialize(&cd).unwrap();
+        let decoded: ChangeData = bincode::deserialize(&bytes).unwrap();
+
+        assert_eq!(cd, decoded);
+    }
+
+    #[test]
+    fn test_field_op_clone() {
+        let op = FieldOp::set(serde_json::json!({"nested": true}));
+        let cloned = op.clone();
+        assert_eq!(op, cloned);
+    }
+
+    #[test]
+    fn test_delta_data_clone() {
+        let mut delta = DeltaData::new();
+        delta.set_field("key", serde_json::json!("value"));
+
+        let cloned = delta.clone();
+        assert_eq!(delta.len(), cloned.len());
     }
 }

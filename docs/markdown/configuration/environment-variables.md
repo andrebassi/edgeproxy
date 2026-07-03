@@ -70,6 +70,9 @@ All edgeProxy settings are configured via environment variables.
 | `EDGEPROXY_REPLICATION_GOSSIP_INTERVAL_MS` | `1000` | Gossip ping interval |
 | `EDGEPROXY_REPLICATION_SYNC_INTERVAL_MS` | `5000` | Sync flush interval |
 | `EDGEPROXY_REPLICATION_CLUSTER_NAME` | `edgeproxy` | Cluster name for isolation |
+| `EDGEPROXY_REPLICATION_MODE` | `primary` | Node mode: `primary` or `replica` |
+| `EDGEPROXY_REPLICATION_MDNS_ENABLED` | `true` | Enable mDNS auto-discovery |
+| `EDGEPROXY_REPLICATION_MDNS_SERVICE_TYPE` | `_edgeproxy._udp.local.` | mDNS service type |
 
 See [Built-in Replication](./replication) for detailed documentation.
 

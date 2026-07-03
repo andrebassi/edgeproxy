@@ -368,11 +368,11 @@ O edgeProxy possui cobertura abrangente de testes unitários seguindo o padrão 
 
 | Métrica | Valor |
 |---------|-------|
-| **Total de Testes** | 786 |
-| **Cobertura de Linhas** | **98.89%** |
-| **Linhas Cobertas** | 5.694 / 5.758 |
-| **Cobertura de Funções** | 99.46% |
-| **Arquivos com 100%** | 20 |
+| **Total de Testes** | 875 |
+| **Cobertura de Linhas** | **98.71%** |
+| **Cobertura de Regiões** | 98.71% |
+| **Cobertura de Funções** | 99.58% |
+| **Arquivos com 100%** | 22 |
 
 ### Evolução da Cobertura
 
@@ -384,7 +384,8 @@ O projeto alcançou melhorias significativas de cobertura através de testes sis
 | Refatoração | 94.92% | 782 | Adoção do padrão Sans-IO |
 | Build nightly | 98.32% | 782 | `coverage(off)` para I/O |
 | Testes edge case | 98.50% | 784 | Circuit breaker, métricas |
-| Final | **98.89%** | 786 | TLS, connection pool |
+| TLS & pool | 98.89% | 786 | TLS, connection pool |
+| **Replicação v0.4.0** | **98.71%** | **875** | Merkle tree, mDNS, delta sync |
 
 ### Benefícios da Arquitetura Sans-IO
 
@@ -474,16 +475,29 @@ cargo test -- --test-threads=1
 | `application::proxy_service` | 26 | 99.43% | Orquestração de use cases |
 | `config` | 24 | 100.00% | Carregamento de configuração |
 
-#### Camada de Infraestrutura (NOVO)
+#### Camada de Infraestrutura
 
 | Módulo | Testes | Cobertura | Descrição |
 |--------|--------|-----------|-----------|
 | `infrastructure::circuit_breaker` | 22 | 98.30% | Padrão circuit breaker |
-| `infrastructure::config_watcher` | 17 | 94.30% | Hot reload de configuração |
-| `infrastructure::rate_limiter` | 14 | 91.95% | Rate limiting token bucket |
-| `infrastructure::health_checker` | 17 | 91.64% | Health checks ativos |
-| `infrastructure::connection_pool` | 17 | 87.21% | Pool de conexões TCP |
-| `infrastructure::shutdown` | 11 | 86.29% | Graceful shutdown |
+| `infrastructure::config_watcher` | 17 | 95.30% | Hot reload de configuração |
+| `infrastructure::rate_limiter` | 14 | 93.55% | Rate limiting token bucket |
+| `infrastructure::health_checker` | 17 | 92.00% | Health checks ativos |
+| `infrastructure::connection_pool` | 17 | 93.71% | Pool de conexões TCP |
+| `infrastructure::shutdown` | 11 | 93.65% | Graceful shutdown |
+
+#### Camada de Replicação (v0.4.0)
+
+| Módulo | Testes | Cobertura | Descrição |
+|--------|--------|-----------|-----------|
+| `replication::types` | 45 | 98.81% | Timestamps HLC, ChangeSet, NodeId |
+| `replication::config` | 12 | 99.34% | Configuração de replicação |
+| `replication::sync` | 38 | 97.63% | Detecção de mudanças, resolução LWW |
+| `replication::gossip` | 42 | 98.80% | Protocolo SWIM, membership do cluster |
+| `replication::transport` | 48 | 98.55% | Transporte QUIC, encoding Sans-IO |
+| `replication::agent` | 18 | 99.77% | Orquestração de replicação |
+| `replication::merkle` | 40 | 98.92% | Anti-entropia Merkle tree |
+| `replication::mdns` | 25 | 99.02% | Auto-descoberta mDNS |
 
 ### Testes por Camada (Arquitetura Hexagonal)
 
@@ -658,19 +672,20 @@ open target/llvm-cov/html/index.html
 
 ### Resultados de Cobertura
 
-**Cobertura Final: 98.89%** (5.694 de 5.758 linhas cobertas)
+**Cobertura Final: 98.71%** (7.159 linhas, 98.98% cobertura de linhas)
 
-> **Nota**: Cobertura medida com `rustup run nightly cargo llvm-cov` para habilitar atributos `coverage(off)` em código de I/O.
+> **Nota**: Cobertura medida com `cargo +nightly llvm-cov` para habilitar atributos `coverage(off)` em código de I/O.
 
 #### Cobertura por Camada
 
-| Camada | Linhas | Cobertura | Status |
-|--------|--------|-----------|--------|
+| Camada | Regiões | Cobertura | Status |
+|--------|---------|-----------|--------|
 | **Domínio** | 761 | 99.47% | ✓ Excelente |
 | **Aplicação** | 706 | 99.72% | ✓ Excelente |
 | **Adapters Inbound** | 2.100 | 98.90% | ✓ Excelente |
 | **Adapters Outbound** | 1.450 | 98.62% | ✓ Excelente |
-| **Infraestrutura** | 455 | 97.14% | ✓ Muito Bom |
+| **Infraestrutura** | 455 | 95.30% | ✓ Muito Bom |
+| **Replicação** | 7.159 | 98.98% | ✓ Excelente |
 | **Config** | 286 | 100.00% | ✓ Completo |
 
 #### Cobertura Detalhada por Arquivo
@@ -703,16 +718,29 @@ open target/llvm-cov/html/index.html
 | `adapters/outbound/maxmind_geo_resolver.rs` | 145 | 139 | 95.86% |
 | `adapters/outbound/postgres_backend_repo.rs` | 231 | 204 | 88.31% |
 
-##### Camada de Infraestrutura (NOVO)
+##### Camada de Infraestrutura
 
-| Arquivo | Linhas | Cobertas | Cobertura |
-|---------|--------|----------|-----------|
-| `infrastructure/circuit_breaker.rs` | 353 | 347 | 98.30% |
-| `infrastructure/config_watcher.rs` | 298 | 281 | 94.30% |
-| `infrastructure/rate_limiter.rs` | 261 | 240 | 91.95% |
-| `infrastructure/health_checker.rs` | 371 | 340 | 91.64% |
-| `infrastructure/connection_pool.rs` | 391 | 341 | 87.21% |
-| `infrastructure/shutdown.rs` | 175 | 151 | 86.29% |
+| Arquivo | Regiões | Cobertura |
+|---------|---------|-----------|
+| `infrastructure/circuit_breaker.rs` | 353 | 98.30% |
+| `infrastructure/config_watcher.rs` | 744 | 95.30% |
+| `infrastructure/rate_limiter.rs` | 589 | 93.55% |
+| `infrastructure/health_checker.rs` | 950 | 92.00% |
+| `infrastructure/connection_pool.rs` | 1224 | 93.71% |
+| `infrastructure/shutdown.rs` | 488 | 93.65% |
+
+##### Camada de Replicação (v0.4.0)
+
+| Arquivo | Regiões | Cobertura |
+|---------|---------|-----------|
+| `replication/types.rs` | 1186 | 98.81% |
+| `replication/config.rs` | 303 | 99.34% |
+| `replication/sync.rs` | 1875 | 97.28% |
+| `replication/gossip.rs` | 2350 | 98.80% |
+| `replication/transport.rs` | 1668 | 98.55% |
+| `replication/agent.rs` | 981 | 99.77% |
+| `replication/merkle.rs` | 1030 | 98.92% |
+| `replication/mdns.rs` | 619 | 99.02% |
 
 ### Exclusões de Cobertura (Padrão Sans-IO)
 
@@ -726,26 +754,32 @@ O padrão Sans-IO separa lógica de negócio pura de operações de I/O. Código
 | `start()`, `run()` (servers) | Event loops async com I/O de rede |
 | `start_event_loop()`, `start_flush_loop()` (agent) | Loops async de background |
 | `request()` (transport) | Operações de rede QUIC |
-| `release()` (connection_pool) | Gerenciamento async de conexões |
+| `release()`, `acquire()`, `clear()` (connection_pool) | Gerenciamento async de conexões |
+| `handle_connection()` (transport) | Handling de conexões QUIC |
+| `start()`, `execute_actions()` (gossip) | I/O de gossip UDP |
+| `start()`, `start_discovery()` (mdns) | I/O de rede mDNS |
 | `SkipServerVerification` impl | Callback TLS (não pode ser testado unitariamente) |
 | Módulos de teste (`#[cfg(test)]`) | Código de teste não é código de produção |
 
-### Linhas Não Cobertas Restantes (64 total)
+### Regiões Não Cobertas Restantes (162 total)
 
-As 64 linhas não cobertas se enquadram nestas categorias:
+As 162 regiões não cobertas se enquadram nestas categorias:
 
-| Categoria | Linhas | Motivo |
-|-----------|--------|--------|
-| **Erros de banco** | 12 | Falhas de conexão DB (caminhos inalcançáveis) |
-| **Panics de teste** | 8 | Branches de testes `#[should_panic]` |
-| **Loops CAS retry** | 15 | Retries de compare-and-swap atômico |
-| **Chamadas tracing** | 10 | `tracing::warn!()` em branches de erro |
-| **Callbacks TLS** | 19 | Implementação trait `ServerCertVerifier` |
+| Categoria | Regiões | Motivo |
+|-----------|---------|--------|
+| **Erros de banco** | 20 | Falhas de conexão DB (caminhos inalcançáveis) |
+| **I/O de rede** | 45 | Operações async de rede excluídas |
+| **Loops CAS retry** | 25 | Retries de compare-and-swap atômico |
+| **Chamadas tracing** | 18 | `tracing::warn!()` em branches de erro |
+| **Callbacks TLS/QUIC** | 30 | Callbacks crypto (não pode ser testado unitariamente) |
+| **Signal handlers** | 10 | Handling de sinais do SO |
+| **Callbacks mDNS** | 14 | Handling de eventos mDNS |
 
 Estes representam edge cases que requerem:
 - Falhas de sistemas externos (DB, rede)
 - Condições concorrentes específicas (retries CAS)
-- Callbacks de handshake TLS do rustls
+- Callbacks de handshake TLS/QUIC
+- Handling de sinais do sistema operacional
 
 Toda **lógica de negócio está 100% coberta** - apenas wrappers de I/O e caminhos de erro inalcançáveis permanecem.
 
@@ -788,3 +822,229 @@ A flag `--fail-under-lines 98` garante que a cobertura não caia abaixo de 98% n
 | `prometheus_metrics_store` | `test_concurrent_decrement` | Testa operações concorrentes de contador |
 | `types` | `test_hlc_compare_same_time_different_counter` | Testa desempate por contador HLC |
 | `types` | `test_hlc_compare_same_time_same_counter` | Testa caso de igualdade HLC |
+
+### Novos Testes Adicionados (v0.4.0)
+
+#### Testes Merkle Tree (40 testes)
+
+| Teste | Descrição |
+|-------|-----------|
+| `test_merkle_tree_new` | Criação e inicialização da árvore |
+| `test_merkle_tree_insert` | Inserção de linha única |
+| `test_merkle_tree_update` | Atualização de linha muda hash |
+| `test_merkle_tree_remove` | Remoção de linha |
+| `test_merkle_tree_root_hash` | Cálculo do hash raiz |
+| `test_merkle_tree_diff` | Detecção de diferenças entre árvores |
+| `test_merkle_tree_diff_at_depth` | Traversal de diff multi-nível |
+| `test_merkle_tree_get_hash` | Recuperação de hash por profundidade |
+| `test_merkle_tree_leaves` | Acesso aos nós folha |
+| `test_merkle_message_serialization` | Roundtrip de mensagens |
+| `test_merkle_message_range_response` | Mensagem de resposta de range |
+| `test_merkle_message_data_request` | Mensagem de requisição de dados |
+| `test_hash_to_prefix_at_depth_zero` | Cálculo de prefixo em profundidade 0 |
+
+#### Testes mDNS Discovery (25 testes)
+
+| Teste | Descrição |
+|-------|-----------|
+| `test_mdns_discovery_new` | Criação do serviço de descoberta |
+| `test_mdns_config_service_type` | Configuração de tipo de serviço |
+| `test_discovered_peer_debug` | Formato debug de DiscoveredPeer |
+| `test_gossip_addr` | Accessor de endereço gossip |
+| `test_transport_addr` | Accessor de endereço transport |
+| `test_notify_discovered_logs_valid_peer` | Logging de notificação de peer válido |
+| `test_notify_discovered_different_cluster` | Filtragem de peer cross-cluster |
+| `test_notify_discovered_channel_closed` | Handling de erro de canal |
+
+#### Testes Delta Sync
+
+| Teste | Descrição |
+|-------|-----------|
+| `test_field_op_serialization` | Roundtrip de enum FieldOp |
+| `test_delta_data_new` | Criação de DeltaData |
+| `test_change_data_full` | Dados de mudança de linha completa |
+| `test_change_data_delta` | Dados de mudança delta |
+| `test_apply_delta_change` | Aplicação de delta na linha |
+
+#### Testes Transport Sans-IO (48 testes)
+
+| Teste | Descrição |
+|-------|-----------|
+| `test_encode_message_*` | Encoding de mensagens para todos os tipos |
+| `test_decode_message_*` | Decoding de mensagens com validação |
+| `test_validate_broadcast` | Validação de checksum de broadcast |
+| `test_create_sync_request` | Criação de mensagem SyncRequest |
+| `test_extract_sync_response` | Extração de changesets de resposta |
+| `test_message_type_name` | Conversão de tipo de mensagem para string |
+| `test_count_broadcast_changes` | Contagem de mudanças |
+| `test_get_broadcast_seq` | Extração de número de sequência |
+
+---
+
+## Testes de Configuração (v0.4.0)
+
+Testes de configuração validam todas as combinações de variáveis de ambiente e configurações de serviço.
+
+### Executando Testes de Configuração
+
+```bash
+# Executar todos os testes de configuração
+task test:config-all
+
+# Executar testes individuais
+task test:config-default      # Apenas TCP (config mínima)
+task test:config-all-services # Todos os serviços habilitados
+task test:config-regions      # Testar regiões sa, us, eu, ap
+task test:config-api          # Endpoints da API
+task test:config-tls          # TLS com cert auto-assinado
+task test:config-replication  # Replicação (gossip + transport)
+task test:config-binding      # Configuração de TTL de binding
+task test:config-debug        # Modo debug
+
+# Limpeza entre testes
+task test:config-cleanup
+```
+
+### Cenários de Teste
+
+| Teste | Variáveis de Ambiente | Resultado Esperado |
+|-------|----------------------|-------------------|
+| **Default** | `LISTEN_ADDR`, `DB_PATH`, `REGION` | TCP proxy na 8080 |
+| **All Services** | Todas vars habilitadas | 6 portas listening |
+| **Regions** | `REGION=sa/us/eu/ap` | Cada região inicia |
+| **API** | `API_ENABLED=true` | 6 endpoints funcionando |
+| **TLS** | `TLS_ENABLED=true` | Cert auto-assinado |
+| **Replication** | `REPLICATION_ENABLED=true` | Gossip + Transport |
+| **Binding** | `BINDING_TTL_SECS=300` | TTL customizado funciona |
+| **Debug** | `DEBUG=1` | Logging de debug |
+
+### Testes de Endpoints da API
+
+| Endpoint | Método | Teste | Esperado |
+|----------|--------|-------|----------|
+| `/health` | GET | Health check | `{"status":"ok"}` |
+| `/api/v1/register` | POST | Registrar backend | `{"registered":true}` |
+| `/api/v1/backends` | GET | Listar backends | Array de backends |
+| `/api/v1/backends/:id` | GET | Obter backend | Detalhes do backend |
+| `/api/v1/heartbeat/:id` | POST | Atualizar heartbeat | `{"status":"ok"}` |
+| `/api/v1/backends/:id` | DELETE | Remover backend | `{"deregistered":true}` |
+
+---
+
+## Testes de Deploy na AWS (v0.4.0)
+
+Testes de deploy em produção na AWS Irlanda (eu-west-1).
+
+### Detalhes do Deploy
+
+| Propriedade | Valor |
+|-------------|-------|
+| **Instância** | 34.240.78.199 |
+| **Região** | eu-west-1 (Irlanda) |
+| **Tipo de Instância** | t3.micro |
+| **SO** | Ubuntu 22.04 |
+| **Binário** | `/opt/edgeproxy/edge-proxy` |
+| **Serviço** | systemd (`edgeproxy.service`) |
+
+### Configuração do Serviço
+
+```ini
+[Service]
+Environment=EDGEPROXY_LISTEN_ADDR=0.0.0.0:8080
+Environment=EDGEPROXY_DB_PATH=/opt/edgeproxy/routing.db
+Environment=EDGEPROXY_REGION=eu
+Environment=EDGEPROXY_DB_RELOAD_SECS=5
+Environment=EDGEPROXY_BINDING_TTL_SECS=600
+Environment=EDGEPROXY_BINDING_GC_INTERVAL_SECS=60
+Environment=EDGEPROXY_TLS_ENABLED=true
+Environment=EDGEPROXY_TLS_LISTEN_ADDR=0.0.0.0:8443
+Environment=EDGEPROXY_API_ENABLED=true
+Environment=EDGEPROXY_API_LISTEN_ADDR=0.0.0.0:8081
+Environment=EDGEPROXY_HEARTBEAT_TTL_SECS=60
+Environment=EDGEPROXY_DNS_ENABLED=true
+Environment=EDGEPROXY_DNS_LISTEN_ADDR=0.0.0.0:5353
+Environment=EDGEPROXY_DNS_DOMAIN=internal
+Environment=EDGEPROXY_REPLICATION_ENABLED=true
+Environment=EDGEPROXY_REPLICATION_NODE_ID=pop-eu-ireland-1
+Environment=EDGEPROXY_REPLICATION_GOSSIP_ADDR=0.0.0.0:4001
+Environment=EDGEPROXY_REPLICATION_TRANSPORT_ADDR=0.0.0.0:4002
+Environment=EDGEPROXY_REPLICATION_DB_PATH=/opt/edgeproxy/state.db
+Environment=EDGEPROXY_REPLICATION_CLUSTER_NAME=edgeproxy-prod
+```
+
+### Resultados dos Testes (2025-12-08)
+
+#### Conectividade de Portas
+
+| Serviço | Porta | Protocolo | Status |
+|---------|-------|-----------|--------|
+| TCP Proxy | 8080 | TCP | OK |
+| TLS Server | 8443 | TCP | OK |
+| API Server | 8081 | TCP | OK |
+| DNS Server | 5353 | UDP | OK |
+| Gossip | 4001 | UDP | OK |
+| Transport | 4002 | UDP | OK |
+
+#### Testes de Endpoints da API
+
+| Endpoint | Status | Resposta |
+|----------|--------|----------|
+| `GET /health` | OK | `{"status":"ok","version":"0.2.0"}` |
+| `POST /api/v1/register` | OK | `{"registered":true}` |
+| `GET /api/v1/backends` | OK | Lista backends registrados |
+| `GET /api/v1/backends/:id` | OK | Retorna detalhes do backend |
+| `POST /api/v1/heartbeat/:id` | OK | `{"status":"ok"}` |
+| `DELETE /api/v1/backends/:id` | OK | `{"deregistered":true}` |
+
+#### Certificado TLS
+
+```
+subject=CN = rcgen self signed cert
+issuer=CN = rcgen self signed cert
+```
+
+#### Estado da Replicação
+
+- State DB: `/opt/edgeproxy/state.db` (36KB)
+- Node ID: `pop-eu-ireland-1`
+- Cluster: `edgeproxy-prod`
+
+### Executando Testes na AWS
+
+```bash
+# SSH para a instância
+ssh -i .keys/edgeproxy-hub.pem ubuntu@34.240.78.199
+
+# Verificar status do serviço
+sudo systemctl status edgeproxy
+
+# Ver logs
+sudo journalctl -u edgeproxy -f
+
+# Testar API localmente
+curl http://127.0.0.1:8081/health | jq .
+
+# Testar de fora (requer regras no Security Group)
+curl http://34.240.78.199:8081/health
+```
+
+### Regras do Security Group
+
+| Porta | Protocolo | Origem | Descrição |
+|-------|-----------|--------|-----------|
+| 22 | TCP | Seu IP | SSH |
+| 8080 | TCP | 0.0.0.0/0 | TCP Proxy |
+| 8081 | TCP | 0.0.0.0/0 | API Server |
+| 8443 | TCP | 0.0.0.0/0 | TLS Server |
+| 5353 | UDP | 0.0.0.0/0 | DNS Server |
+| 4001 | UDP | VPC CIDR | Gossip (interno) |
+| 4002 | UDP | VPC CIDR | Transport (interno) |
+
+### Resultados de Latência (Brasil para Irlanda)
+
+| Teste | Latência |
+|-------|----------|
+| API Health Check | ~408ms |
+| 100 requests | 42.8s total (~428ms média) |
+
+> Nota: A latência é esperada devido à distância geográfica (Brasil para Irlanda ~9.000km)

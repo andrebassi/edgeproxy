@@ -42,6 +42,8 @@ crc32fast = "1"                         # Fast CRC32 for checksums
 parking_lot = "0.12"                    # Faster locks than std
 bytes = "1"                             # Byte buffer utilities
 rand = "0.8"                            # Random number generation for gossip
+mdns-sd = "0.11"                        # mDNS service discovery for auto-clustering
+sha2 = "0.10"                           # SHA-256 for Merkle tree hashing
 
 [dev-dependencies]
 tokio-test = "0.4"

@@ -1,4 +1,4 @@
-# Rust build artifacts
+]# Rust build artifacts
 /target/
 **/*.rs.bk
 Cargo.lock
@@ -24,6 +24,9 @@ routing.db
 
 # Task runner
 .task/
+
+# Binaries
+dist/
 
 # Docusaurus
 docs/node_modules/

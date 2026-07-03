@@ -40,10 +40,14 @@ pub mod gossip;
 pub mod sync;
 pub mod transport;
 pub mod agent;
+pub mod mdns;
+pub mod merkle;
 
-pub use config::ReplicationConfig;
-pub use types::{Change, ChangeKind, ChangeSet, NodeId};
+pub use config::{ReplicationConfig, ReplicaMode};
+pub use types::{Change, ChangeData, ChangeKind, ChangeSet, DeltaData, FieldOp, NodeId};
 pub use gossip::{GossipService, Member, MemberState};
 pub use sync::{SyncService, VersionVector};
 pub use transport::{TransportService, PeerConnection};
 pub use agent::ReplicationAgent;
+pub use mdns::{MdnsDiscovery, MdnsHandle, DiscoveredPeer};
+pub use merkle::{MerkleTree, MerkleNode, MerkleMessage, Hash, EMPTY_HASH, hash_kv, hash_to_hex};

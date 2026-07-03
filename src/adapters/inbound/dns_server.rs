@@ -85,26 +85,18 @@ impl DnsHandler {
                 .and_then(|g| g.resolve(client_ip))
         };
 
-        // Get best backend for this client
-        let backend = self
-            .proxy_service
-            .resolve_backend_with_geo(client_ip, client_geo)
-            .await?;
-
-        // If app_name is specified, filter by app
-        if let Some(app) = app_name {
-            if backend.app != app {
-                // Need to find a backend for the specific app
-                // For now, just check if the resolved backend matches
-                tracing::debug!(
-                    "backend {} is for app {}, not {}",
-                    backend.id,
-                    backend.app,
-                    app
-                );
-                // TODO: Filter backends by app in resolve_backend
-            }
-        }
+        // Get best backend - filter by app if specified
+        let backend = if let Some(app) = app_name {
+            // Use app-filtered resolver
+            self.proxy_service
+                .resolve_backend_by_app(app, client_ip, client_geo)
+                .await?
+        } else {
+            // No app filter - return any backend based on geo
+            self.proxy_service
+                .resolve_backend_with_geo(client_ip, client_geo)
+                .await?
+        };
 
         // Parse backend IP
         match backend.wg_ip.parse::<Ipv4Addr>() {
@@ -222,7 +214,7 @@ impl DnsServer {
     #[cfg_attr(coverage_nightly, coverage(off))]
     pub async fn run(&self) -> anyhow::Result<()> {
         let addr: SocketAddr = self.listen_addr.parse()?;
-        let socket = UdpSocket::bind(&addr).await?;
+        let socket = Arc::new(UdpSocket::bind(&addr).await?);
 
         tracing::info!("DNS server listening on {}", self.listen_addr);
 
@@ -234,11 +226,12 @@ impl DnsServer {
                     let data = buf[..len].to_vec();
                     let socket_clone = socket.local_addr().ok();
                     let handler = self.handler.clone();
+                    let socket_arc = socket.clone();
 
                     // Handle in background
                     tokio::spawn(async move {
                         if let Err(e) =
-                            Self::handle_packet(handler, &data, src, socket_clone).await
+                            Self::handle_packet(handler, &data, src, socket_clone, socket_arc).await
                         {
                             tracing::error!("DNS packet error from {}: {:?}", src, e);
                         }
@@ -251,21 +244,22 @@ impl DnsServer {
         }
     }
 
-    /// Handle a DNS packet.
+    /// Handle a DNS packet and send response.
     ///
     /// This function is called from within the run() loop and is excluded from
     /// coverage as it's an async network handler.
     #[cfg_attr(coverage_nightly, coverage(off))]
     async fn handle_packet(
-        _handler: Arc<DnsHandler>,
+        handler: Arc<DnsHandler>,
         data: &[u8],
         src: SocketAddr,
         _local: Option<SocketAddr>,
+        socket: Arc<UdpSocket>,
     ) -> anyhow::Result<()> {
-        // Parse DNS message
         use hickory_proto::op::Message;
-        use hickory_proto::serialize::binary::BinDecodable;
+        use hickory_proto::serialize::binary::{BinDecodable, BinEncodable};
 
+        // Parse DNS message
         let message = Message::from_bytes(data)?;
 
         tracing::debug!(
@@ -274,9 +268,61 @@ impl DnsServer {
             message.queries().len()
         );
 
-        // For now, just log - full implementation would process and respond
+        // Process each query
         for query in message.queries() {
-            tracing::debug!("  Query: {} {}", query.name(), query.query_type());
+            let name = query.name();
+            let query_type = query.query_type();
+
+            tracing::debug!("DNS query: {} {} from {}", name, query_type, src);
+
+            // Only handle A record queries
+            if query_type != RecordType::A {
+                let mut response = Message::new();
+                response.set_id(message.id());
+                response.set_message_type(MessageType::Response);
+                response.set_op_code(OpCode::Query);
+                response.set_response_code(ResponseCode::NotImp);
+                response.add_query(query.clone());
+
+                let bytes = response.to_bytes()?;
+                socket.send_to(&bytes, src).await?;
+                continue;
+            }
+
+            // Resolve the query
+            let client_ip = src.ip();
+            let query_name = LowerName::from(name.clone());
+            let result = handler.resolve(&query_name, client_ip).await;
+
+            let mut response = Message::new();
+            response.set_id(message.id());
+            response.set_message_type(MessageType::Response);
+            response.set_op_code(OpCode::Query);
+            response.set_authoritative(true);
+            response.add_query(query.clone());
+
+            match result {
+                Some(ip) => {
+                    // Build A record response
+                    let mut record = Record::new();
+                    record.set_name(name.clone());
+                    record.set_ttl(handler.config.ttl);
+                    record.set_record_type(RecordType::A);
+                    record.set_data(Some(RData::A(A(ip))));
+
+                    response.set_response_code(ResponseCode::NoError);
+                    response.add_answer(record);
+
+                    tracing::info!("DNS resolved: {} -> {}", name, ip);
+                }
+                None => {
+                    response.set_response_code(ResponseCode::NXDomain);
+                    tracing::debug!("DNS NXDOMAIN: {}", name);
+                }
+            }
+
+            let bytes = response.to_bytes()?;
+            socket.send_to(&bytes, src).await?;
         }
 
         Ok(())

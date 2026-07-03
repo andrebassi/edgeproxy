@@ -135,8 +135,24 @@ impl ReplicationAgent {
     }
 
     /// Record a backend change for replication.
-    pub fn record_backend_change(&self, id: &str, kind: ChangeKind, data: &str) {
+    /// Returns false if this is a read replica (changes not recorded).
+    pub fn record_backend_change(&self, id: &str, kind: ChangeKind, data: &str) -> bool {
+        if self.config.is_read_replica() {
+            tracing::debug!("ignoring write on read replica: {}", id);
+            return false;
+        }
         self.sync.record_change("backends", id, kind, data);
+        true
+    }
+
+    /// Check if this node is a read replica.
+    pub fn is_read_replica(&self) -> bool {
+        self.config.is_read_replica()
+    }
+
+    /// Check if this node is a primary.
+    pub fn is_primary(&self) -> bool {
+        self.config.is_primary()
     }
 
     /// Flush pending changes and broadcast.
@@ -201,6 +217,12 @@ impl ReplicationAgent {
 
     #[cfg_attr(coverage_nightly, coverage(off))]
     fn start_flush_loop(&self) {
+        // Read replicas don't broadcast changes
+        if self.config.is_read_replica() {
+            tracing::info!("read replica mode: skipping flush loop");
+            return;
+        }
+
         let sync = self.sync.clone();
         let transport = self.transport.clone();
         let shutdown = self.shutdown.clone();
@@ -272,6 +294,11 @@ impl ReplicationAgentBuilder {
 
     pub fn cluster_name(mut self, name: impl Into<String>) -> Self {
         self.config = self.config.cluster_name(name);
+        self
+    }
+
+    pub fn replica_mode(mut self, mode: crate::replication::config::ReplicaMode) -> Self {
+        self.config = self.config.replica_mode(mode);
         self
     }
 
@@ -581,14 +608,119 @@ mod tests {
         agent.sync.init_db().unwrap();
 
         // Test all change kinds
-        agent.record_backend_change("b1", ChangeKind::Insert, r#"{"app":"a"}"#);
-        agent.record_backend_change("b1", ChangeKind::Update, r#"{"app":"b"}"#);
-        agent.record_backend_change("b1", ChangeKind::Delete, "{}");
+        assert!(agent.record_backend_change("b1", ChangeKind::Insert, r#"{"app":"a"}"#));
+        assert!(agent.record_backend_change("b1", ChangeKind::Update, r#"{"app":"b"}"#));
+        assert!(agent.record_backend_change("b1", ChangeKind::Delete, "{}"));
 
         let cs = agent.flush().await.unwrap();
         assert_eq!(cs.changes.len(), 3);
         assert_eq!(cs.changes[0].kind, ChangeKind::Insert);
         assert_eq!(cs.changes[1].kind, ChangeKind::Update);
         assert_eq!(cs.changes[2].kind, ChangeKind::Delete);
+    }
+
+    // ==================== Replica Mode Tests ====================
+
+    #[test]
+    fn test_agent_is_primary_by_default() {
+        let temp = NamedTempFile::new().unwrap();
+        let config = ReplicationConfig::new("test-node")
+            .db_path(temp.path().to_str().unwrap());
+
+        let agent = ReplicationAgent::new(config).unwrap();
+        assert!(agent.is_primary());
+        assert!(!agent.is_read_replica());
+    }
+
+    #[test]
+    fn test_agent_as_read_replica() {
+        use crate::replication::config::ReplicaMode;
+
+        let temp = NamedTempFile::new().unwrap();
+        let config = ReplicationConfig::new("test-node")
+            .db_path(temp.path().to_str().unwrap())
+            .replica_mode(ReplicaMode::ReadReplica);
+
+        let agent = ReplicationAgent::new(config).unwrap();
+        assert!(agent.is_read_replica());
+        assert!(!agent.is_primary());
+    }
+
+    #[tokio::test]
+    async fn test_read_replica_ignores_writes() {
+        use crate::replication::config::ReplicaMode;
+
+        let temp = NamedTempFile::new().unwrap();
+        let config = ReplicationConfig::new("test-node")
+            .db_path(temp.path().to_str().unwrap())
+            .replica_mode(ReplicaMode::ReadReplica);
+
+        let agent = ReplicationAgent::new(config).unwrap();
+        agent.sync.init_db().unwrap();
+
+        // Writes should be ignored on read replica
+        assert!(!agent.record_backend_change("b1", ChangeKind::Insert, r#"{"app":"a"}"#));
+
+        // Flush should return None (no changes recorded)
+        let cs = agent.flush().await;
+        assert!(cs.is_none());
+    }
+
+    #[tokio::test]
+    async fn test_primary_records_writes() {
+        let temp = NamedTempFile::new().unwrap();
+        let config = ReplicationConfig::new("test-node")
+            .db_path(temp.path().to_str().unwrap());
+
+        let agent = ReplicationAgent::new(config).unwrap();
+        agent.sync.init_db().unwrap();
+
+        // Writes should be recorded on primary
+        assert!(agent.record_backend_change("b1", ChangeKind::Insert, r#"{"app":"a"}"#));
+
+        // Flush should return the changeset
+        let cs = agent.flush().await;
+        assert!(cs.is_some());
+        assert_eq!(cs.unwrap().changes.len(), 1);
+    }
+
+    #[test]
+    fn test_builder_with_replica_mode() {
+        use crate::replication::config::ReplicaMode;
+
+        let temp = NamedTempFile::new().unwrap();
+
+        let agent = ReplicationAgentBuilder::new("replica-node")
+            .db_path(temp.path().to_str().unwrap())
+            .replica_mode(ReplicaMode::ReadReplica)
+            .build()
+            .unwrap();
+
+        assert!(agent.is_read_replica());
+    }
+
+    #[tokio::test]
+    async fn test_read_replica_can_apply_changesets() {
+        use crate::replication::config::ReplicaMode;
+
+        let temp = NamedTempFile::new().unwrap();
+        let config = ReplicationConfig::new("replica-node")
+            .db_path(temp.path().to_str().unwrap())
+            .replica_mode(ReplicaMode::ReadReplica);
+
+        let agent = ReplicationAgent::new(config).unwrap();
+        agent.sync.init_db().unwrap();
+
+        // Read replicas can still apply changesets from other nodes
+        let source_node = NodeId::new("primary-node");
+        let data = r#"{"app":"remote-app","region":"us"}"#;
+        let changes = vec![
+            Change::new("backends", "remote-backend", ChangeKind::Insert, data, &source_node),
+        ];
+        let cs = ChangeSet::new(source_node, 1, changes);
+
+        // Apply changeset - this should work on read replicas
+        let applied = agent.apply_changeset(&cs).await.unwrap();
+        assert_eq!(applied, 1);
     }
 }

@@ -30,3 +30,232 @@ tasks:
           echo -n "Testing $ip:$port... "
           nc -zv -w 2 $ip $port 2>&1 | grep -q "succeeded" && echo "OK" || echo "FAIL"
         done
+
+  coverage:
+    desc: Run tests with coverage (requires nightly)
+    cmds:
+      - rustup run nightly cargo llvm-cov --summary-only
+
+  coverage-html:
+    desc: Generate HTML coverage report
+    cmds:
+      - rustup run nightly cargo llvm-cov --html
+      - echo "Report generated at target/llvm-cov/html/index.html"
+
+  config-all:
+    desc: Run all configuration tests (sequential)
+    cmds:
+      - task test:config-cleanup
+      - task test:config-default
+      - task test:config-cleanup
+      - task test:config-all-services
+      - task test:config-cleanup
+      - task test:config-regions
+      - task test:config-cleanup
+      - task test:config-api
+      - task test:config-cleanup
+      - task test:config-tls
+      - task test:config-cleanup
+      - task test:config-replication
+      - task test:config-cleanup
+      - task test:config-binding
+      - task test:config-cleanup
+      - task test:config-debug
+      - task test:config-cleanup
+      - echo "All configuration tests completed!"
+
+  config-default:
+    desc: Test default configuration (TCP only)
+    cmds:
+      - echo "Test - Default Configuration (TCP only)"
+      - pkill -f 'target.*edge-proxy' || true
+      - sleep 0.5
+      - |
+        EDGEPROXY_LISTEN_ADDR=127.0.0.1:18080 \
+        EDGEPROXY_DB_PATH=routing.db \
+        EDGEPROXY_REGION=sa \
+        ./target/release/edge-proxy &
+        sleep 2
+        nc -z 127.0.0.1 18080 && echo "[PASS] TCP Proxy on 127.0.0.1:18080" || echo "[FAIL] TCP not listening"
+        pkill -f 'target.*edge-proxy' || true
+
+  config-all-services:
+    desc: Test all services enabled
+    cmds:
+      - echo "Test - All Services Enabled"
+      - pkill -f 'target.*edge-proxy' || true
+      - sleep 0.5
+      - |
+        EDGEPROXY_LISTEN_ADDR=127.0.0.1:18080 \
+        EDGEPROXY_DB_PATH=routing.db \
+        EDGEPROXY_REGION=eu \
+        EDGEPROXY_TLS_ENABLED=true \
+        EDGEPROXY_TLS_LISTEN_ADDR=127.0.0.1:18443 \
+        EDGEPROXY_API_ENABLED=true \
+        EDGEPROXY_API_LISTEN_ADDR=127.0.0.1:18081 \
+        EDGEPROXY_DNS_ENABLED=true \
+        EDGEPROXY_DNS_LISTEN_ADDR=127.0.0.1:15353 \
+        EDGEPROXY_DNS_DOMAIN=test.local \
+        EDGEPROXY_REPLICATION_ENABLED=true \
+        EDGEPROXY_REPLICATION_NODE_ID=test-node-1 \
+        EDGEPROXY_REPLICATION_GOSSIP_ADDR=127.0.0.1:14001 \
+        EDGEPROXY_REPLICATION_TRANSPORT_ADDR=127.0.0.1:14002 \
+        EDGEPROXY_REPLICATION_CLUSTER_NAME=test-cluster \
+        ./target/release/edge-proxy &
+        sleep 3
+        echo "Service Status:"
+        nc -z 127.0.0.1 18080 && echo "  [OK] TCP Proxy on 18080" || echo "  [X] TCP Proxy FAILED"
+        nc -z 127.0.0.1 18443 && echo "  [OK] TLS Server on 18443" || echo "  [X] TLS Server FAILED"
+        nc -z 127.0.0.1 18081 && echo "  [OK] API Server on 18081" || echo "  [X] API Server FAILED"
+        nc -z 127.0.0.1 14002 && echo "  [OK] Replication on 14002" || echo "  [X] Replication FAILED"
+        echo "API Health:"
+        curl -s http://127.0.0.1:18081/health | jq . || echo "  [X] API not responding"
+        pkill -f 'target.*edge-proxy' || true
+
+  config-regions:
+    desc: Test all region configurations
+    cmds:
+      - echo "Test - Region Configurations"
+      - |
+        for region in sa us eu ap; do
+          pkill -f 'target.*edge-proxy' 2>/dev/null || true
+          sleep 0.3
+          EDGEPROXY_LISTEN_ADDR=127.0.0.1:18080 \
+          EDGEPROXY_DB_PATH=routing.db \
+          EDGEPROXY_REGION=$region \
+          ./target/release/edge-proxy &
+          sleep 1
+          if nc -z 127.0.0.1 18080 2>/dev/null; then
+            echo "  [OK] Region $region started"
+          else
+            echo "  [X] Region $region FAILED"
+          fi
+          pkill -f 'target.*edge-proxy' 2>/dev/null || true
+        done
+
+  config-api:
+    desc: Test API endpoints
+    cmds:
+      - echo "Test - API Endpoints"
+      - pkill -f 'target.*edge-proxy' || true
+      - sleep 0.5
+      - |
+        EDGEPROXY_LISTEN_ADDR=127.0.0.1:18080 \
+        EDGEPROXY_DB_PATH=routing.db \
+        EDGEPROXY_REGION=eu \
+        EDGEPROXY_API_ENABLED=true \
+        EDGEPROXY_API_LISTEN_ADDR=127.0.0.1:18081 \
+        EDGEPROXY_HEARTBEAT_TTL_SECS=30 \
+        ./target/release/edge-proxy &
+        sleep 2
+        echo "1. GET /health"
+        curl -s http://127.0.0.1:18081/health | jq . && echo "   [OK]" || echo "   [X]"
+        echo "2. POST /api/v1/register"
+        curl -s -X POST http://127.0.0.1:18081/api/v1/register \
+          -H "Content-Type: application/json" \
+          -d '{"id":"test-1","app":"test","region":"eu","ip":"127.0.0.1","port":9001}' | jq . && echo "   [OK]" || echo "   [X]"
+        echo "3. GET /api/v1/backends"
+        curl -s http://127.0.0.1:18081/api/v1/backends | jq . && echo "   [OK]" || echo "   [X]"
+        echo "4. GET /api/v1/backends/:id"
+        curl -s http://127.0.0.1:18081/api/v1/backends/test-1 | jq . && echo "   [OK]" || echo "   [X]"
+        echo "5. POST /api/v1/heartbeat/:id"
+        curl -s -X POST http://127.0.0.1:18081/api/v1/heartbeat/test-1 | jq . && echo "   [OK]" || echo "   [X]"
+        echo "6. DELETE /api/v1/backends/:id"
+        curl -s -X DELETE http://127.0.0.1:18081/api/v1/backends/test-1 | jq . && echo "   [OK]" || echo "   [X]"
+        pkill -f 'target.*edge-proxy' || true
+
+  config-tls:
+    desc: Test TLS server with self-signed cert
+    cmds:
+      - echo "Test - TLS Server (Self-Signed)"
+      - pkill -f 'target.*edge-proxy' || true
+      - sleep 0.5
+      - |
+        EDGEPROXY_LISTEN_ADDR=127.0.0.1:18080 \
+        EDGEPROXY_DB_PATH=routing.db \
+        EDGEPROXY_REGION=eu \
+        EDGEPROXY_TLS_ENABLED=true \
+        EDGEPROXY_TLS_LISTEN_ADDR=127.0.0.1:18443 \
+        ./target/release/edge-proxy &
+        sleep 2
+        if nc -z 127.0.0.1 18443 2>/dev/null; then
+          echo "  [OK] TLS port 18443 listening"
+          echo "Certificate Info:"
+          echo | openssl s_client -connect 127.0.0.1:18443 2>/dev/null | openssl x509 -noout -subject -issuer 2>/dev/null || echo "  (self-signed)"
+        else
+          echo "  [X] TLS port not listening"
+        fi
+        pkill -f 'target.*edge-proxy' || true
+
+  config-replication:
+    desc: Test replication configuration
+    cmds:
+      - echo "Test - Replication Configuration"
+      - pkill -f 'target.*edge-proxy' || true
+      - sleep 0.5
+      - |
+        EDGEPROXY_LISTEN_ADDR=127.0.0.1:18080 \
+        EDGEPROXY_DB_PATH=routing.db \
+        EDGEPROXY_REGION=eu \
+        EDGEPROXY_REPLICATION_ENABLED=true \
+        EDGEPROXY_REPLICATION_NODE_ID=test-node-1 \
+        EDGEPROXY_REPLICATION_GOSSIP_ADDR=127.0.0.1:14001 \
+        EDGEPROXY_REPLICATION_TRANSPORT_ADDR=127.0.0.1:14002 \
+        EDGEPROXY_REPLICATION_DB_PATH=/tmp/test-state.db \
+        EDGEPROXY_REPLICATION_CLUSTER_NAME=test-cluster \
+        ./target/release/edge-proxy &
+        sleep 2
+        echo "Replication Status:"
+        nc -z 127.0.0.1 14001 && echo "  [OK] Gossip (UDP) on 14001" || echo "  [X] Gossip FAILED"
+        nc -z 127.0.0.1 14002 && echo "  [OK] Transport (QUIC) on 14002" || echo "  [X] Transport FAILED"
+        ls -la /tmp/test-state.db 2>/dev/null && echo "  [OK] State DB created" || echo "  [X] State DB not found"
+        pkill -f 'target.*edge-proxy' || true
+        rm -f /tmp/test-state.db
+
+  config-binding:
+    desc: Test binding TTL configuration
+    cmds:
+      - echo "Test - Binding Configuration"
+      - pkill -f 'target.*edge-proxy' || true
+      - sleep 0.5
+      - |
+        EDGEPROXY_LISTEN_ADDR=127.0.0.1:18080 \
+        EDGEPROXY_DB_PATH=routing.db \
+        EDGEPROXY_REGION=eu \
+        EDGEPROXY_BINDING_TTL_SECS=300 \
+        EDGEPROXY_BINDING_GC_INTERVAL_SECS=30 \
+        ./target/release/edge-proxy &
+        sleep 1
+        if nc -z 127.0.0.1 18080 2>/dev/null; then
+          echo "  [OK] Binding TTL=300s, GC=30s"
+        else
+          echo "  [X] Failed to start"
+        fi
+        pkill -f 'target.*edge-proxy' || true
+
+  config-debug:
+    desc: Test debug mode
+    cmds:
+      - echo "Test - Debug Mode"
+      - pkill -f 'target.*edge-proxy' || true
+      - sleep 0.5
+      - |
+        DEBUG=1 \
+        EDGEPROXY_LISTEN_ADDR=127.0.0.1:18080 \
+        EDGEPROXY_DB_PATH=routing.db \
+        EDGEPROXY_REGION=eu \
+        ./target/release/edge-proxy &
+        sleep 1
+        if nc -z 127.0.0.1 18080 2>/dev/null; then
+          echo "  [OK] Debug mode enabled"
+        else
+          echo "  [X] Failed to start"
+        fi
+        pkill -f 'target.*edge-proxy' || true
+
+  config-cleanup:
+    desc: Kill any running test processes
+    cmds:
+      - pkill -f 'target.*edge-proxy' || true
+      - rm -f /tmp/test-state.db
+      - echo "Cleanup complete"

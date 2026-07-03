@@ -70,6 +70,9 @@ Todas as configurações do edgeProxy são feitas via variáveis de ambiente.
 | `EDGEPROXY_REPLICATION_GOSSIP_INTERVAL_MS` | `1000` | Intervalo de ping gossip |
 | `EDGEPROXY_REPLICATION_SYNC_INTERVAL_MS` | `5000` | Intervalo de flush do sync |
 | `EDGEPROXY_REPLICATION_CLUSTER_NAME` | `edgeproxy` | Nome do cluster para isolamento |
+| `EDGEPROXY_REPLICATION_MODE` | `primary` | Modo do nó: `primary` ou `replica` |
+| `EDGEPROXY_REPLICATION_MDNS_ENABLED` | `true` | Habilitar auto-descoberta mDNS |
+| `EDGEPROXY_REPLICATION_MDNS_SERVICE_TYPE` | `_edgeproxy._udp.local.` | Tipo de serviço mDNS |
 
 Veja [Replicação Built-in](./replication) para documentação detalhada.
 

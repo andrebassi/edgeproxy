@@ -481,10 +481,210 @@ sudo ufw allow from 10.50.0.0/16 to any port 4001 proto udp
 sudo ufw allow from 10.50.0.0/16 to any port 4002 proto udp
 ```
 
-## Melhorias Futuras
+## Funcionalidades Avançadas (v0.4.0)
 
-- [ ] Delta sync (enviar apenas campos alterados)
-- [ ] Anti-entropia baseada em Merkle tree
-- [ ] Descoberta automática de cluster via mDNS
-- [ ] Métricas Prometheus para lag de replicação
-- [ ] Read replicas para SQLite local
+As seguintes funcionalidades foram adicionadas na v0.4.0 para melhorar eficiência, observabilidade e facilidade de uso.
+
+### Delta Sync
+
+Em vez de enviar a linha inteira a cada atualização, o edgeProxy agora suporta **delta sync** que transmite apenas campos alterados.
+
+```rust
+// src/replication/types.rs
+pub enum FieldOp {
+    Set(serde_json::Value),  // Campo alterado
+    Unset,                    // Campo removido
+}
+
+pub struct DeltaData {
+    pub fields: HashMap<String, FieldOp>,
+}
+
+pub enum ChangeData {
+    Full(String),      // Linha completa (retrocompatível)
+    Delta(DeltaData),  // Apenas campos alterados
+}
+```
+
+**Benefícios:**
+- Redução de bandwidth para linhas grandes com pequenas alterações
+- Sync mais rápido para atualizações de alta frequência
+- Retrocompatível com nós rodando versões anteriores
+
+**Uso:**
+```rust
+// Calcular delta entre dois objetos JSON
+let delta = DeltaData::diff(&valor_antigo, &valor_novo);
+
+// Aplicar delta para reconstruir o novo valor
+let resultado = delta.apply_to(&valor_antigo);
+assert_eq!(resultado, valor_novo);
+```
+
+### Anti-Entropia com Merkle Tree
+
+Merkle trees permitem detecção e reparo eficientes de divergência entre nós sem comparar todos os dados.
+
+```rust
+// src/replication/merkle.rs
+pub struct MerkleTree {
+    table: String,
+    max_depth: u8,
+    leaves: BTreeMap<u64, Hash>,
+}
+
+impl MerkleTree {
+    pub fn root_hash(&mut self) -> Hash;
+    pub fn diff(&mut self, other: &mut MerkleTree, depth: u8) -> Vec<u64>;
+}
+```
+
+**Como funciona:**
+1. Cada nó mantém uma Merkle tree por tabela
+2. Periodicamente, nós trocam hashes raiz
+3. Se as raízes diferem, comparam subárvores recursivamente
+4. Apenas ranges de chaves divergentes precisam sincronizar
+
+**Tipos de mensagem:**
+```rust
+pub enum MerkleMessage {
+    RootRequest { table: String },
+    RootResponse { table: String, hash: Hash, depth: u8 },
+    RangeRequest { table: String, depth: u8, prefixes: Vec<u64> },
+    RangeResponse { table: String, depth: u8, hashes: Vec<(u64, Hash)> },
+    DataRequest { table: String, prefix: u64, depth: u8 },
+    DataResponse { table: String, entries: Vec<(String, Vec<u8>)> },
+}
+```
+
+### Descoberta Automática via mDNS
+
+Descoberta automática de peers via multicast DNS elimina a necessidade de configuração manual de `bootstrap_peers` em redes locais.
+
+```rust
+// src/replication/mdns.rs
+pub struct MdnsDiscovery {
+    config: ReplicationConfig,
+    discovered_tx: mpsc::Sender<DiscoveredPeer>,
+}
+
+pub struct DiscoveredPeer {
+    pub node_id: String,
+    pub cluster: String,
+    pub gossip_addr: SocketAddr,
+    pub transport_addr: SocketAddr,
+}
+```
+
+**Registro de serviço:**
+- Tipo de serviço: `_edgeproxy._udp.local.`
+- Records TXT: `node_id`, `cluster`, `gossip`, `transport`
+
+**Configuração:**
+
+| Variável | Padrão | Descrição |
+|----------|--------|-----------|
+| `EDGEPROXY_REPLICATION_MDNS_ENABLED` | `true` | Habilitar descoberta mDNS |
+| `EDGEPROXY_REPLICATION_MDNS_SERVICE_TYPE` | `_edgeproxy._udp.local.` | Tipo de serviço mDNS |
+
+**Exemplo:** Com mDNS habilitado, nós na mesma LAN se descobrem automaticamente:
+
+```bash
+# Nó 1 - Nenhum bootstrap peer necessário!
+EDGEPROXY_REPLICATION_ENABLED=true
+EDGEPROXY_REPLICATION_NODE_ID=pop-1
+EDGEPROXY_REPLICATION_MDNS_ENABLED=true
+
+# Nó 2 - Descobre automaticamente o Nó 1
+EDGEPROXY_REPLICATION_ENABLED=true
+EDGEPROXY_REPLICATION_NODE_ID=pop-2
+EDGEPROXY_REPLICATION_MDNS_ENABLED=true
+```
+
+### Métricas Prometheus
+
+Métricas de replicação agora são expostas via endpoint Prometheus para monitorar a saúde da replicação.
+
+**Novas métricas:**
+
+| Métrica | Tipo | Descrição |
+|---------|------|-----------|
+| `edgeproxy_replication_lag_ms` | Gauge | Tempo desde último sync bem-sucedido |
+| `edgeproxy_replication_pending_changes` | Gauge | Mudanças aguardando broadcast |
+| `edgeproxy_replication_applied_total` | Counter | Total de mudanças aplicadas de peers |
+| `edgeproxy_replication_broadcast_total` | Counter | Total de changesets enviados |
+| `edgeproxy_replication_errors_total` | Counter | Erros de replicação |
+| `edgeproxy_replication_peers_alive` | Gauge | Número de membros vivos no cluster |
+| `edgeproxy_replication_merkle_repairs_total` | Counter | Reparos de anti-entropia realizados |
+| `edgeproxy_replication_bytes_sent` | Counter | Bytes enviados para replicação |
+| `edgeproxy_replication_bytes_received` | Counter | Bytes recebidos para replicação |
+
+**Exemplo de output Prometheus:**
+```text
+# TYPE edgeproxy_replication_lag_ms gauge
+edgeproxy_replication_lag_ms{region="sa"} 15
+
+# TYPE edgeproxy_replication_peers_alive gauge
+edgeproxy_replication_peers_alive{region="sa"} 3
+
+# TYPE edgeproxy_replication_applied_total counter
+edgeproxy_replication_applied_total{region="sa"} 1523
+```
+
+**Dashboard Grafana:** Crie alertas para:
+- `edgeproxy_replication_lag_ms > 30000` (30s de lag)
+- `edgeproxy_replication_peers_alive < 2` (cluster degradado)
+- `rate(edgeproxy_replication_errors_total[5m]) > 0` (erros ocorrendo)
+
+### Read Replicas
+
+Read replicas recebem todas as mudanças mas não fazem broadcast, permitindo escalabilidade de leitura.
+
+```rust
+// src/replication/config.rs
+pub enum ReplicaMode {
+    Primary,      // Nó completo read-write
+    ReadReplica,  // Nó read-only
+}
+```
+
+**Comportamento:**
+- **Primary**: Registra mudanças locais, faz broadcast para peers
+- **ReadReplica**: Recebe mudanças, NÃO registra nem faz broadcast
+
+**Configuração:**
+
+| Variável | Padrão | Descrição |
+|----------|--------|-----------|
+| `EDGEPROXY_REPLICATION_MODE` | `primary` | Modo do nó: `primary` ou `replica` |
+
+**Casos de uso:**
+- Escalar tráfego de leitura entre múltiplos nós
+- Cache de leitura geográfico sem overhead de escrita
+- Nós standby para disaster recovery
+
+**Exemplo:**
+```bash
+# Nó primário (escritas vão para cá)
+EDGEPROXY_REPLICATION_MODE=primary
+EDGEPROXY_REPLICATION_NODE_ID=primary-1
+
+# Read replica (recebe todos os dados, sem escritas)
+EDGEPROXY_REPLICATION_MODE=replica
+EDGEPROXY_REPLICATION_NODE_ID=replica-1
+EDGEPROXY_REPLICATION_BOOTSTRAP_PEERS=primary-1:4001
+```
+
+## Referência de Código-Fonte
+
+| Arquivo | Propósito |
+|---------|-----------|
+| `src/replication/mod.rs` | Exports do módulo |
+| `src/replication/config.rs` | ReplicationConfig, ReplicaMode |
+| `src/replication/types.rs` | HlcTimestamp, NodeId, Change, ChangeSet, DeltaData, FieldOp |
+| `src/replication/gossip.rs` | GossipService, GossipMessage, Member |
+| `src/replication/sync.rs` | SyncService, rastreamento de mudanças |
+| `src/replication/transport.rs` | TransportService, comunicação QUIC peer-to-peer |
+| `src/replication/agent.rs` | ReplicationAgent orquestrador |
+| `src/replication/mdns.rs` | MdnsDiscovery, registro de serviço mDNS |
+| `src/replication/merkle.rs` | MerkleTree, sync de anti-entropia |

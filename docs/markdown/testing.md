@@ -368,11 +368,11 @@ edgeProxy has comprehensive unit test coverage following the Hexagonal Architect
 
 | Metric | Value |
 |--------|-------|
-| **Total Tests** | 786 |
-| **Line Coverage** | **98.89%** |
-| **Lines Covered** | 5,694 / 5,758 |
-| **Function Coverage** | 99.46% |
-| **Files with 100%** | 20 |
+| **Total Tests** | 875 |
+| **Line Coverage** | **98.71%** |
+| **Region Coverage** | 98.71% |
+| **Function Coverage** | 99.58% |
+| **Files with 100%** | 22 |
 
 ### Coverage Evolution
 
@@ -384,7 +384,8 @@ The project achieved significant coverage improvements through systematic testin
 | Refactoring | 94.92% | 782 | Sans-IO pattern adoption |
 | Nightly build | 98.32% | 782 | `coverage(off)` for I/O |
 | Edge case tests | 98.50% | 784 | Circuit breaker, metrics |
-| Final | **98.89%** | 786 | TLS, connection pool |
+| TLS & pool | 98.89% | 786 | TLS, connection pool |
+| **Replication v0.4.0** | **98.71%** | **875** | Merkle tree, mDNS, delta sync |
 
 ### Sans-IO Architecture Benefits
 
@@ -474,16 +475,29 @@ cargo test -- --test-threads=1
 | `application::proxy_service` | 26 | 99.43% | Use case orchestration |
 | `config` | 24 | 100.00% | Configuration loading |
 
-#### Infrastructure Layer (NEW)
+#### Infrastructure Layer
 
 | Module | Tests | Coverage | Description |
 |--------|-------|----------|-------------|
 | `infrastructure::circuit_breaker` | 22 | 98.30% | Circuit breaker pattern |
-| `infrastructure::config_watcher` | 17 | 94.30% | Hot reload configuration |
-| `infrastructure::rate_limiter` | 14 | 91.95% | Token bucket rate limiting |
-| `infrastructure::health_checker` | 17 | 91.64% | Active health checks |
-| `infrastructure::connection_pool` | 17 | 87.21% | TCP connection pooling |
-| `infrastructure::shutdown` | 11 | 86.29% | Graceful shutdown |
+| `infrastructure::config_watcher` | 17 | 95.30% | Hot reload configuration |
+| `infrastructure::rate_limiter` | 14 | 93.55% | Token bucket rate limiting |
+| `infrastructure::health_checker` | 17 | 92.00% | Active health checks |
+| `infrastructure::connection_pool` | 17 | 93.71% | TCP connection pooling |
+| `infrastructure::shutdown` | 11 | 93.65% | Graceful shutdown |
+
+#### Replication Layer (v0.4.0)
+
+| Module | Tests | Coverage | Description |
+|--------|-------|----------|-------------|
+| `replication::types` | 45 | 98.81% | HLC timestamps, ChangeSet, NodeId |
+| `replication::config` | 12 | 99.34% | Replication configuration |
+| `replication::sync` | 38 | 97.63% | Change detection, LWW conflict resolution |
+| `replication::gossip` | 42 | 98.80% | SWIM protocol, cluster membership |
+| `replication::transport` | 48 | 98.55% | QUIC transport, Sans-IO message encoding |
+| `replication::agent` | 18 | 99.77% | Replication orchestration |
+| `replication::merkle` | 40 | 98.92% | Merkle tree anti-entropy |
+| `replication::mdns` | 25 | 99.02% | mDNS auto-discovery |
 
 ### Tests by Layer (Hexagonal Architecture)
 
@@ -658,19 +672,20 @@ open target/llvm-cov/html/index.html
 
 ### Coverage Results
 
-**Final Coverage: 98.89%** (5,694 of 5,758 lines covered)
+**Final Coverage: 98.71%** (7,159 lines, 98.98% line coverage)
 
-> **Note**: Coverage measured with `rustup run nightly cargo llvm-cov` to enable `coverage(off)` attributes on I/O code.
+> **Note**: Coverage measured with `cargo +nightly llvm-cov` to enable `coverage(off)` attributes on I/O code.
 
 #### Coverage by Layer
 
-| Layer | Lines | Coverage | Status |
-|-------|-------|----------|--------|
+| Layer | Regions | Coverage | Status |
+|-------|---------|----------|--------|
 | **Domain** | 761 | 99.47% | ✓ Excellent |
 | **Application** | 706 | 99.72% | ✓ Excellent |
 | **Inbound Adapters** | 2,100 | 98.90% | ✓ Excellent |
 | **Outbound Adapters** | 1,450 | 98.62% | ✓ Excellent |
-| **Infrastructure** | 455 | 97.14% | ✓ Very Good |
+| **Infrastructure** | 455 | 95.30% | ✓ Very Good |
+| **Replication** | 7,159 | 98.98% | ✓ Excellent |
 | **Config** | 286 | 100.00% | ✓ Complete |
 
 #### Detailed Coverage by File
@@ -703,16 +718,29 @@ open target/llvm-cov/html/index.html
 | `adapters/outbound/maxmind_geo_resolver.rs` | 145 | 139 | 95.86% |
 | `adapters/outbound/postgres_backend_repo.rs` | 231 | 204 | 88.31% |
 
-##### Infrastructure Layer (NEW)
+##### Infrastructure Layer
 
-| File | Lines | Covered | Coverage |
-|------|-------|---------|----------|
-| `infrastructure/circuit_breaker.rs` | 353 | 347 | 98.30% |
-| `infrastructure/config_watcher.rs` | 298 | 281 | 94.30% |
-| `infrastructure/rate_limiter.rs` | 261 | 240 | 91.95% |
-| `infrastructure/health_checker.rs` | 371 | 340 | 91.64% |
-| `infrastructure/connection_pool.rs` | 391 | 341 | 87.21% |
-| `infrastructure/shutdown.rs` | 175 | 151 | 86.29% |
+| File | Regions | Coverage |
+|------|---------|----------|
+| `infrastructure/circuit_breaker.rs` | 353 | 98.30% |
+| `infrastructure/config_watcher.rs` | 744 | 95.30% |
+| `infrastructure/rate_limiter.rs` | 589 | 93.55% |
+| `infrastructure/health_checker.rs` | 950 | 92.00% |
+| `infrastructure/connection_pool.rs` | 1224 | 93.71% |
+| `infrastructure/shutdown.rs` | 488 | 93.65% |
+
+##### Replication Layer (v0.4.0)
+
+| File | Regions | Coverage |
+|------|---------|----------|
+| `replication/types.rs` | 1186 | 98.81% |
+| `replication/config.rs` | 303 | 99.34% |
+| `replication/sync.rs` | 1875 | 97.28% |
+| `replication/gossip.rs` | 2350 | 98.80% |
+| `replication/transport.rs` | 1668 | 98.55% |
+| `replication/agent.rs` | 981 | 99.77% |
+| `replication/merkle.rs` | 1030 | 98.92% |
+| `replication/mdns.rs` | 619 | 99.02% |
 
 ### Coverage Exclusions (Sans-IO Pattern)
 
@@ -726,26 +754,32 @@ The Sans-IO pattern separates pure business logic from I/O operations. Code that
 | `start()`, `run()` (servers) | Async event loops with network I/O |
 | `start_event_loop()`, `start_flush_loop()` (agent) | Background async loops |
 | `request()` (transport) | QUIC network operations |
-| `release()` (connection_pool) | Async connection management |
+| `release()`, `acquire()`, `clear()` (connection_pool) | Async connection management |
+| `handle_connection()` (transport) | QUIC connection handling |
+| `start()`, `execute_actions()` (gossip) | UDP gossip I/O |
+| `start()`, `start_discovery()` (mdns) | mDNS network I/O |
 | `SkipServerVerification` impl | TLS callback (cannot unit test) |
 | Test modules (`#[cfg(test)]`) | Test code is not production code |
 
-### Remaining Uncovered Lines (64 total)
+### Remaining Uncovered Regions (162 total)
 
-The 64 uncovered lines fall into these categories:
+The 162 uncovered regions fall into these categories:
 
-| Category | Lines | Reason |
-|----------|-------|--------|
-| **Database errors** | 12 | DB connection failures (unreachable paths) |
-| **Test panics** | 8 | `#[should_panic]` test branches |
-| **CAS retry loops** | 15 | Atomic compare-and-swap retries |
-| **Tracing calls** | 10 | `tracing::warn!()` in error branches |
-| **TLS callbacks** | 19 | `ServerCertVerifier` trait impl |
+| Category | Regions | Reason |
+|----------|---------|--------|
+| **Database errors** | 20 | DB connection failures (unreachable paths) |
+| **Network I/O** | 45 | Async network operations excluded |
+| **CAS retry loops** | 25 | Atomic compare-and-swap retries |
+| **Tracing calls** | 18 | `tracing::warn!()` in error branches |
+| **TLS/QUIC callbacks** | 30 | Crypto callbacks (cannot unit test) |
+| **Signal handlers** | 10 | OS signal handling |
+| **mDNS callbacks** | 14 | mDNS event handling |
 
 These represent edge cases that require:
 - External system failures (DB, network)
 - Specific concurrent conditions (CAS retries)
-- TLS handshake callbacks from rustls
+- TLS/QUIC handshake callbacks
+- OS-level signal handling
 
 All **business logic is 100% covered** - only I/O wrappers and unreachable error paths remain.
 
@@ -788,3 +822,229 @@ The `--fail-under-lines 98` flag ensures coverage doesn't drop below 98% in CI.
 | `prometheus_metrics_store` | `test_concurrent_decrement` | Tests concurrent counter operations |
 | `types` | `test_hlc_compare_same_time_different_counter` | Tests HLC counter tiebreaker |
 | `types` | `test_hlc_compare_same_time_same_counter` | Tests HLC equality case |
+
+### New Tests Added (v0.4.0)
+
+#### Merkle Tree Tests (40 tests)
+
+| Test | Description |
+|------|-------------|
+| `test_merkle_tree_new` | Tree creation and initialization |
+| `test_merkle_tree_insert` | Single row insertion |
+| `test_merkle_tree_update` | Row update changes hash |
+| `test_merkle_tree_remove` | Row removal |
+| `test_merkle_tree_root_hash` | Root hash calculation |
+| `test_merkle_tree_diff` | Detecting differences between trees |
+| `test_merkle_tree_diff_at_depth` | Multi-level diff traversal |
+| `test_merkle_tree_get_hash` | Hash retrieval at depth |
+| `test_merkle_tree_leaves` | Leaf node access |
+| `test_merkle_message_serialization` | Message roundtrip |
+| `test_merkle_message_range_response` | Range response message |
+| `test_merkle_message_data_request` | Data request message |
+| `test_hash_to_prefix_at_depth_zero` | Prefix calculation at depth 0 |
+
+#### mDNS Discovery Tests (25 tests)
+
+| Test | Description |
+|------|-------------|
+| `test_mdns_discovery_new` | Discovery service creation |
+| `test_mdns_config_service_type` | Service type configuration |
+| `test_discovered_peer_debug` | DiscoveredPeer debug format |
+| `test_gossip_addr` | Gossip address accessor |
+| `test_transport_addr` | Transport address accessor |
+| `test_notify_discovered_logs_valid_peer` | Valid peer notification logging |
+| `test_notify_discovered_different_cluster` | Cross-cluster peer filtering |
+| `test_notify_discovered_channel_closed` | Channel error handling |
+
+#### Delta Sync Tests
+
+| Test | Description |
+|------|-------------|
+| `test_field_op_serialization` | FieldOp enum roundtrip |
+| `test_delta_data_new` | DeltaData creation |
+| `test_change_data_full` | Full row change data |
+| `test_change_data_delta` | Delta change data |
+| `test_apply_delta_change` | Delta application to row |
+
+#### Transport Sans-IO Tests (48 tests)
+
+| Test | Description |
+|------|-------------|
+| `test_encode_message_*` | Message encoding for all types |
+| `test_decode_message_*` | Message decoding with validation |
+| `test_validate_broadcast` | Broadcast checksum validation |
+| `test_create_sync_request` | SyncRequest message creation |
+| `test_extract_sync_response` | Response changeset extraction |
+| `test_message_type_name` | Message type string conversion |
+| `test_count_broadcast_changes` | Change counting |
+| `test_get_broadcast_seq` | Sequence number extraction |
+
+---
+
+## Configuration Tests (v0.4.0)
+
+Configuration tests validate all environment variable combinations and service configurations.
+
+### Running Configuration Tests
+
+```bash
+# Run all configuration tests
+task test:config-all
+
+# Run individual tests
+task test:config-default      # TCP only (minimal config)
+task test:config-all-services # All services enabled
+task test:config-regions      # Test sa, us, eu, ap regions
+task test:config-api          # API endpoints
+task test:config-tls          # TLS with self-signed cert
+task test:config-replication  # Replication (gossip + transport)
+task test:config-binding      # Binding TTL configuration
+task test:config-debug        # Debug mode
+
+# Cleanup between tests
+task test:config-cleanup
+```
+
+### Test Scenarios
+
+| Test | Environment Variables | Expected Result |
+|------|----------------------|-----------------|
+| **Default** | `LISTEN_ADDR`, `DB_PATH`, `REGION` | TCP proxy on 8080 |
+| **All Services** | All vars enabled | 6 ports listening |
+| **Regions** | `REGION=sa/us/eu/ap` | Each region starts |
+| **API** | `API_ENABLED=true` | 6 endpoints working |
+| **TLS** | `TLS_ENABLED=true` | Self-signed cert |
+| **Replication** | `REPLICATION_ENABLED=true` | Gossip + Transport |
+| **Binding** | `BINDING_TTL_SECS=300` | Custom TTL works |
+| **Debug** | `DEBUG=1` | Debug logging |
+
+### API Endpoint Tests
+
+| Endpoint | Method | Test | Expected |
+|----------|--------|------|----------|
+| `/health` | GET | Health check | `{"status":"ok"}` |
+| `/api/v1/register` | POST | Register backend | `{"registered":true}` |
+| `/api/v1/backends` | GET | List backends | Array of backends |
+| `/api/v1/backends/:id` | GET | Get backend | Backend details |
+| `/api/v1/heartbeat/:id` | POST | Update heartbeat | `{"status":"ok"}` |
+| `/api/v1/backends/:id` | DELETE | Remove backend | `{"deregistered":true}` |
+
+---
+
+## AWS Deployment Tests (v0.4.0)
+
+Production deployment tests on AWS Ireland (eu-west-1).
+
+### Deployment Details
+
+| Property | Value |
+|----------|-------|
+| **Instance** | 34.240.78.199 |
+| **Region** | eu-west-1 (Ireland) |
+| **Instance Type** | t3.micro |
+| **OS** | Ubuntu 22.04 |
+| **Binary** | `/opt/edgeproxy/edge-proxy` |
+| **Service** | systemd (`edgeproxy.service`) |
+
+### Service Configuration
+
+```ini
+[Service]
+Environment=EDGEPROXY_LISTEN_ADDR=0.0.0.0:8080
+Environment=EDGEPROXY_DB_PATH=/opt/edgeproxy/routing.db
+Environment=EDGEPROXY_REGION=eu
+Environment=EDGEPROXY_DB_RELOAD_SECS=5
+Environment=EDGEPROXY_BINDING_TTL_SECS=600
+Environment=EDGEPROXY_BINDING_GC_INTERVAL_SECS=60
+Environment=EDGEPROXY_TLS_ENABLED=true
+Environment=EDGEPROXY_TLS_LISTEN_ADDR=0.0.0.0:8443
+Environment=EDGEPROXY_API_ENABLED=true
+Environment=EDGEPROXY_API_LISTEN_ADDR=0.0.0.0:8081
+Environment=EDGEPROXY_HEARTBEAT_TTL_SECS=60
+Environment=EDGEPROXY_DNS_ENABLED=true
+Environment=EDGEPROXY_DNS_LISTEN_ADDR=0.0.0.0:5353
+Environment=EDGEPROXY_DNS_DOMAIN=internal
+Environment=EDGEPROXY_REPLICATION_ENABLED=true
+Environment=EDGEPROXY_REPLICATION_NODE_ID=pop-eu-ireland-1
+Environment=EDGEPROXY_REPLICATION_GOSSIP_ADDR=0.0.0.0:4001
+Environment=EDGEPROXY_REPLICATION_TRANSPORT_ADDR=0.0.0.0:4002
+Environment=EDGEPROXY_REPLICATION_DB_PATH=/opt/edgeproxy/state.db
+Environment=EDGEPROXY_REPLICATION_CLUSTER_NAME=edgeproxy-prod
+```
+
+### Test Results (2025-12-08)
+
+#### Port Connectivity
+
+| Service | Port | Protocol | Status |
+|---------|------|----------|--------|
+| TCP Proxy | 8080 | TCP | OK |
+| TLS Server | 8443 | TCP | OK |
+| API Server | 8081 | TCP | OK |
+| DNS Server | 5353 | UDP | OK |
+| Gossip | 4001 | UDP | OK |
+| Transport | 4002 | UDP | OK |
+
+#### API Endpoint Tests
+
+| Endpoint | Status | Response |
+|----------|--------|----------|
+| `GET /health` | OK | `{"status":"ok","version":"0.2.0"}` |
+| `POST /api/v1/register` | OK | `{"registered":true}` |
+| `GET /api/v1/backends` | OK | Lists registered backends |
+| `GET /api/v1/backends/:id` | OK | Returns backend details |
+| `POST /api/v1/heartbeat/:id` | OK | `{"status":"ok"}` |
+| `DELETE /api/v1/backends/:id` | OK | `{"deregistered":true}` |
+
+#### TLS Certificate
+
+```
+subject=CN = rcgen self signed cert
+issuer=CN = rcgen self signed cert
+```
+
+#### Replication State
+
+- State DB: `/opt/edgeproxy/state.db` (36KB)
+- Node ID: `pop-eu-ireland-1`
+- Cluster: `edgeproxy-prod`
+
+### Running Tests on AWS
+
+```bash
+# SSH to instance
+ssh -i .keys/edgeproxy-hub.pem ubuntu@34.240.78.199
+
+# Check service status
+sudo systemctl status edgeproxy
+
+# View logs
+sudo journalctl -u edgeproxy -f
+
+# Test API locally
+curl http://127.0.0.1:8081/health | jq .
+
+# Test from external (requires Security Group rules)
+curl http://34.240.78.199:8081/health
+```
+
+### Security Group Rules
+
+| Port | Protocol | Source | Description |
+|------|----------|--------|-------------|
+| 22 | TCP | Your IP | SSH |
+| 8080 | TCP | 0.0.0.0/0 | TCP Proxy |
+| 8081 | TCP | 0.0.0.0/0 | API Server |
+| 8443 | TCP | 0.0.0.0/0 | TLS Server |
+| 5353 | UDP | 0.0.0.0/0 | DNS Server |
+| 4001 | UDP | VPC CIDR | Gossip (internal) |
+| 4002 | UDP | VPC CIDR | Transport (internal) |
+
+### Latency Results (Brazil to Ireland)
+
+| Test | Latency |
+|------|---------|
+| API Health Check | ~408ms |
+| 100 requests | 42.8s total (~428ms avg) |
+
+> Note: Latency is expected due to geographic distance (Brazil to Ireland ~9,000km)

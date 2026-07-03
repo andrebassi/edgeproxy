@@ -130,6 +130,7 @@ impl ConnectionPool {
     }
 
     /// Acquire a connection from the pool or create a new one.
+    #[cfg_attr(coverage_nightly, coverage(off))]
     pub async fn acquire(&self, backend_id: &str, addr: &str) -> Result<PooledConnection, PoolError> {
         let pool = self.get_or_create_pool(backend_id, addr);
 
@@ -205,6 +206,7 @@ impl ConnectionPool {
     }
 
     /// Discard a connection (don't return to pool).
+    #[cfg_attr(coverage_nightly, coverage(off))]
     pub async fn discard(&self, mut conn: PooledConnection) {
         let backend_id = conn.backend_id.clone();
 
@@ -280,6 +282,7 @@ impl ConnectionPool {
     }
 
     /// Clear all pools.
+    #[cfg_attr(coverage_nightly, coverage(off))]
     pub async fn clear(&self) {
         for entry in self.pools.iter() {
             let mut connections = entry.connections.lock().await;

@@ -199,6 +199,52 @@ async fn main() -> anyhow::Result<()> {
     }
 
     // Start main TCP server
-    let server = TcpServer::new(proxy_service, cfg.listen_addr, geo_resolver);
+    let server = TcpServer::new(proxy_service, cfg.listen_addr.clone(), geo_resolver);
+
+    // ===== STARTUP SUMMARY =====
+    tracing::info!("═══════════════════════════════════════════════════════════");
+    tracing::info!("  edgeProxy v0.4.0 - Startup Summary");
+    tracing::info!("═══════════════════════════════════════════════════════════");
+    tracing::info!("  Region: {}", cfg.region);
+    tracing::info!("───────────────────────────────────────────────────────────");
+    tracing::info!("  [✓] TCP Proxy:    {}", cfg.listen_addr);
+
+    if cfg.tls_enabled {
+        let tls_addr = cfg.tls_listen_addr.clone().unwrap_or_else(|| "0.0.0.0:8443".to_string());
+        if cfg.tls_cert_path.is_some() {
+            tracing::info!("  [✓] TLS Server:   {} (custom cert)", tls_addr);
+        } else {
+            tracing::info!("  [✓] TLS Server:   {} (self-signed)", tls_addr);
+        }
+    } else {
+        tracing::info!("  [ ] TLS Server:   disabled");
+    }
+
+    if cfg.api_enabled {
+        tracing::info!("  [✓] API Server:   {}", cfg.api_listen_addr);
+    } else {
+        tracing::info!("  [ ] API Server:   disabled");
+    }
+
+    if cfg.dns_enabled {
+        tracing::info!("  [✓] DNS Server:   {} (.{})", cfg.dns_listen_addr, cfg.dns_domain);
+    } else {
+        tracing::info!("  [ ] DNS Server:   disabled");
+    }
+
+    if cfg.replication_enabled {
+        tracing::info!("  [✓] Replication Gossip:    {}", cfg.replication_gossip_addr);
+        tracing::info!("  [✓] Replication Transport: {}", cfg.replication_transport_addr);
+        tracing::info!("      Node ID: {}", cfg.replication_node_id.clone().unwrap_or_else(|| "auto".to_string()));
+        tracing::info!("      Cluster: {}", cfg.replication_cluster_name);
+    } else {
+        tracing::info!("  [ ] Replication:  disabled");
+    }
+
+    tracing::info!("───────────────────────────────────────────────────────────");
+    tracing::info!("  Database: {}", cfg.db_path);
+    tracing::info!("  GeoIP: {}", cfg.geoip_path.clone().unwrap_or_else(|| "embedded".to_string()));
+    tracing::info!("═══════════════════════════════════════════════════════════");
+
     server.run().await
 }

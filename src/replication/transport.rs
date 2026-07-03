@@ -267,6 +267,10 @@ impl TransportService {
     /// Start the transport service.
     #[cfg_attr(coverage_nightly, coverage(off))]
     pub async fn start(&mut self) -> anyhow::Result<()> {
+        // Install the ring crypto provider for rustls (required for QUIC)
+        // This is idempotent - if already installed, it returns Err which we ignore
+        let _ = rustls::crypto::ring::default_provider().install_default();
+
         // Generate self-signed certificate for QUIC
         let cert = rcgen::generate_simple_self_signed(vec![
             self.config.node_id.clone(),

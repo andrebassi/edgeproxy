@@ -160,6 +160,43 @@ impl ProxyService {
         Some(backend)
     }
 
+    /// Resolve the best backend for a specific app.
+    ///
+    /// This method filters backends by app name and uses geo-routing
+    /// to select the best one from matching backends.
+    pub async fn resolve_backend_by_app(
+        &self,
+        app: &str,
+        client_ip: IpAddr,
+        client_geo: Option<GeoInfo>,
+    ) -> Option<Backend> {
+        // Get healthy backends filtered by app
+        let all_backends = self.backend_repo.get_healthy().await;
+        let backends: Vec<Backend> = all_backends
+            .into_iter()
+            .filter(|b| b.app == app)
+            .collect();
+
+        if backends.is_empty() {
+            tracing::debug!("no healthy backends for app: {}", app);
+            return None;
+        }
+
+        // If only one backend matches, return it directly
+        if backends.len() == 1 {
+            return Some(backends.into_iter().next().unwrap());
+        }
+
+        // Use load balancer to pick best backend from matching ones
+        let metrics = self.metrics.clone();
+        LoadBalancer::pick_backend(
+            &backends,
+            &self.local_region,
+            client_geo.as_ref(),
+            |id| metrics.get_connection_count(id),
+        )
+    }
+
     /// Clear the binding for a client.
     ///
     /// Useful when detecting VPN changes or other scenarios
