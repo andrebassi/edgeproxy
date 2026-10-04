@@ -23,6 +23,12 @@ use tracing_subscriber::fmt::format::FmtSpan;
 #[cfg_attr(coverage_nightly, coverage(off))]
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
+    // 🔴 O rustls 0.23 exige UM provedor de criptografia por processo. O nosso declara `ring`, mas uma dependência
+    // traz também o `aws-lc-rs`; com os dois compilados nenhum vira padrão, e o modo TLS entrava em pânico no arranque
+    // ("Could not automatically determine the process-level CryptoProvider" — medido em 03/10/2026). Instalar o `ring`
+    // antes de tudo fecha a escolha. Ignorar o `Err` é seguro: ele só acontece se outro já foi instalado.
+    let _ = rustls::crypto::ring::default_provider().install_default();
+
     // Load configuration from environment
     let cfg = load_config()?;
 
